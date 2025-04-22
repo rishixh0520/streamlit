@@ -193,6 +193,30 @@ export class WidgetStateManager {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TODO: Replace 'any' with a more specific type.
   private readonly elementStates = new Map<string, Map<string, any>>()
 
+  /**
+   * Debouncing helpers for trigger widgets.
+   *
+   * Multiple calls to `setTriggerValue` that happen within the same
+   * JavaScript macrotask (for example, when a single click handler invokes
+   * `setTriggerValue` several times for different trigger names) should be
+   * batched into a single `updateWidgets` message. Otherwise, each call would
+   * schedule its own `setTimeout(…, 0)` which results in multiple
+   * `updateWidgets` messages being sent in quick succession. The Streamlit
+   * backend only handles the *latest* message before rerunning the script,
+   * which means earlier triggers can be lost. We fix this by batching.
+   */
+  private pendingTriggerIds = new Set<string>()
+
+  /** Promise resolvers that should run once the pending trigger batch has
+   *  been flushed to the backend. */
+  private triggerFlushResolvers: Array<() => void> = []
+
+  /** Indicates whether we already scheduled a macrotask-level flush. */
+  private flushScheduled = false
+
+  /** The fragmentId associated with the currently scheduled flush (if any). */
+  private scheduledFragmentId: string | undefined
+
   constructor(props: Props) {
     this.props = props
     this.formsData = createFormsData()
@@ -311,24 +335,74 @@ export class WidgetStateManager {
     source: Source,
     fragmentId: string | undefined
   ): void {
+    // ------------------------------------------------------------------
+    // ChatInput behaves like a trigger widget: its value should be sent to
+    // the backend exactly once and then be cleared so that subsequent
+    // reruns receive an "empty" value. With the introduction of batched
+    // trigger handling, we align ChatInput with the same mechanism used by
+    // `setTriggerValue` to avoid race conditions when multiple updates are
+    // emitted within the same macrotask.
+    // ------------------------------------------------------------------
+
+    // 1. Store the value in a temporary WidgetState proto.
     this.createWidgetState(widget, source).chatInputValue = new ChatInputValue(
       value
     )
-    this.onWidgetValueChanged(widget.formId, source, fragmentId)
-    this.deleteWidgetState(widget.id)
+
+    // 2. Mark this widget ID so that it is cleaned-up after the pending
+    //    batch flush. The `scheduleFlush` helper already takes care of
+    //    deleting all IDs present in `pendingTriggerIds` once the update
+    //    message has been sent.
+    this.pendingTriggerIds.add(widget.id)
+
+    // 3. Schedule (or reuse) a macrotask-level flush so that ChatInput
+    //    updates are coalesced with other trigger/value updates that happen
+    //    during the same event loop tick.
+    this.scheduleFlush(fragmentId)
   }
 
   /**
-   * Sets the trigger value for the given widget ID to true, sends a rerunScript message
-   * to the server, and then immediately unsets the trigger value.
+   * 1. Boolean trigger
+   *    setTriggerValue(widgetInfo, { fromUi: true }, fragmentId)
+   *
+   * 2. Payload (JSON-encoded) trigger
+   *    setTriggerValue(widgetInfo, { fromUi: true }, fragmentId, payload)
+   *
+   *    `payload` can be any JSON-serialisable value. It will be stringified and
+   *    stored in the protobuf `json_trigger_value` field on the backend. If
+   *    `payload` is omitted (or `undefined`) the method falls back to the
+   *    boolean `trigger_value=true` behaviour.
    */
-  public setTriggerValue(
+
+  public setTriggerValue<T>(
     widget: WidgetInfo,
     source: Source,
-    fragmentId: string | undefined
+    fragmentId: string | undefined,
+    value?: T
   ): Promise<void> {
-    this.createWidgetState(widget, source).triggerValue = true
-    return this.setTriggerValueAtEndOfEventLoop(widget, source, fragmentId)
+    const widgetState = this.createWidgetState(widget, source)
+
+    if (value === undefined) {
+      // Simple boolean trigger.
+      widgetState.triggerValue = true
+    } else {
+      // Bidi Component v2: arbitrary payload transported via json_trigger_value.
+      widgetState.jsonTriggerValue =
+        typeof value === "string" ? value : JSON.stringify(value)
+    }
+
+    // --------------------------------------------------------------
+    // Batch trigger updates fired during the same JavaScript macrotask.
+    // --------------------------------------------------------------
+    this.pendingTriggerIds.add(widget.id)
+
+    return new Promise(resolve => {
+      // Queue resolver so callers still get the same promise-based API.
+      this.triggerFlushResolvers.push(resolve)
+
+      // Schedule (or reuse) a macrotask-level flush.
+      this.scheduleFlush(fragmentId)
+    })
   }
 
   public getBoolValue(widget: WidgetInfo): boolean | undefined {
@@ -588,7 +662,8 @@ export class WidgetStateManager {
     if (isValidFormId(formId)) {
       this.syncFormsWithPendingChanges()
     } else if (source.fromUi) {
-      this.sendUpdateWidgetsMessage(fragmentId)
+      // Batch value changes that occur within the same JavaScript macrotask.
+      this.scheduleFlush(fragmentId)
     }
   }
 
@@ -836,6 +911,43 @@ export class WidgetStateManager {
     } else {
       this.elementStates.delete(elementId)
     }
+  }
+
+  /**
+   * Schedule a macrotask-level flush of pending widget updates (triggers and
+   * regular value changes). Multiple calls within the same macrotask will be
+   * coalesced into a single `updateWidgets` message.
+   */
+  private scheduleFlush(fragmentId: string | undefined): void {
+    // Update the stored fragmentId if we don't have one yet. If multiple calls
+    // happen and at least one of them specifies a fragmentId, we keep the
+    // first non-undefined value.
+    if (this.scheduledFragmentId === undefined) {
+      this.scheduledFragmentId = fragmentId
+    }
+
+    if (this.flushScheduled) {
+      return
+    }
+
+    this.flushScheduled = true
+
+    setTimeout(() => {
+      // Send a *single* widgets update containing **all** pending updates.
+      this.sendUpdateWidgetsMessage(this.scheduledFragmentId)
+
+      // Clean-up temporary trigger widget states so they don't leak into future updates.
+      this.pendingTriggerIds.forEach(id => this.deleteWidgetState(id))
+      this.pendingTriggerIds.clear()
+
+      // Resolve all promises that were waiting for this flush.
+      this.triggerFlushResolvers.forEach(r => r())
+      this.triggerFlushResolvers = []
+
+      // Reset scheduling flags.
+      this.flushScheduled = false
+      this.scheduledFragmentId = undefined
+    }, 0)
   }
 }
 
