@@ -22,10 +22,14 @@ export default function main(component) {
     component.data.min,
     component.data.max,
     component.data.value,
-    (el) => component.onChange(el.target.value)
+    (el) => component.setStateValue("slider_value", el.target.value)
   );
 
   component.parentElement.append(sliderEl);
+
+  return () => {
+    sliderEl.remove();
+  };
 }
 
 // This a plain vanilla Slider component that knows nothing

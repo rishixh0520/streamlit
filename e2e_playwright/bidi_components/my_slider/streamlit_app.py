@@ -28,6 +28,7 @@ st.write(
     "Taken from the [Product Spec](https://www.notion.so/snowflake-corp/Latest-Product-Spec-2840a4c245e84ba4a921d7122a2209b8?pvs=4#071968bcb9ea49789292d533f5ad3867)"
 )
 
+
 with st.echo():
     if "value" not in st.session_state:
         st.session_state["value"] = 50
@@ -37,24 +38,24 @@ with st.echo():
         min: int = 0,
         max: int = 100,
         value: int | None = None,
-        callback: WidgetCallback | None = None,
+        on_slider_value_change: WidgetCallback | None = None,
         key: str | None = None,
     ) -> BidiComponentResult:
         if value is None:
             value = min
 
         component = st.components.v2.component(
-            "sliderComponent", js=Path(__file__).parent / "index.js"
+            "sliderComponent",
+            js=(Path(__file__).parent / "index.js").read_text(),
         )
 
         return component(
             data={"label": label, "min": min, "max": max, "value": value},
-            # TODO: Fix this to utilize the new callback API naming convention
-            on_change=callback,
+            on_slider_value_change=on_slider_value_change,
             key=key,
         )
 
-    def handle_change():
+    def handle_slider_value_change():
         st.session_state["value"] = st.session_state["value"] + 1
 
     value = custom_slider(
@@ -62,7 +63,7 @@ with st.echo():
         min=0,
         max=100,
         value=50,
-        callback=handle_change,
+        on_slider_value_change=handle_slider_value_change,
         key="my_slider",
     )
 

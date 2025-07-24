@@ -23,6 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from streamlit.components.v2 import component, component_dg
 from streamlit.components.v2.component_manager import BidiComponentManager
 from streamlit.components.v2.component_path_utils import ComponentPathUtils
 from streamlit.components.v2.component_registry import (
@@ -159,8 +160,60 @@ def test_mixed_content(temp_test_files) -> None:
         assert comp.source_paths["js"] == os.path.dirname(temp_test_files["js_path"])
 
 
-def test_pathlib_path(temp_test_files) -> None:
-    """Test component with Path object."""
+def test_public_api_path_object_rejection() -> None:
+    """Test that public API functions reject Path objects with clear error messages."""
+    from pathlib import Path
+
+    # Test component() function with js parameter
+    with pytest.raises(StreamlitAPIException) as exc_info:
+        component("test", js=Path("test.js"))
+
+    error_msg = str(exc_info.value)
+    assert "js parameter must be a string or None" in error_msg
+    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
+
+    # Test component() function with css parameter
+    with pytest.raises(StreamlitAPIException) as exc_info:
+        component("test", css=Path("test.css"))
+
+    error_msg = str(exc_info.value)
+    assert "css parameter must be a string or None" in error_msg
+    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
+
+    # Test component_dg() function with js parameter
+    with pytest.raises(StreamlitAPIException) as exc_info:
+        component_dg("test", js=Path("test.js"))
+
+    error_msg = str(exc_info.value)
+    assert "js parameter must be a string or None" in error_msg
+    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
+
+    # Test component_dg() function with css parameter
+    with pytest.raises(StreamlitAPIException) as exc_info:
+        component_dg("test", css=Path("test.css"))
+
+    error_msg = str(exc_info.value)
+    assert "css parameter must be a string or None" in error_msg
+    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
+
+    # Test with other invalid types (not just Path)
+    with pytest.raises(StreamlitAPIException) as exc_info:
+        component("test", js=123)  # Integer instead of string
+
+    error_msg = str(exc_info.value)
+    assert "js parameter must be a string or None" in error_msg
+    assert "got int" in error_msg
+
+    with pytest.raises(StreamlitAPIException) as exc_info:
+        component("test", css=["invalid", "list"])  # List instead of string
+
+    error_msg = str(exc_info.value)
+    assert "css parameter must be a string or None" in error_msg
+    assert "got list" in error_msg
+
+
+def test_string_file_path(temp_test_files) -> None:
+    """Test component with string file path."""
     with patch(
         "streamlit.components.v2.component_registry._get_caller_path"
     ) as mock_caller:
@@ -169,15 +222,15 @@ def test_pathlib_path(temp_test_files) -> None:
             temp_test_files["temp_dir"].name, "caller.py"
         )
 
-        js_pathlib = Path(temp_test_files["js_path"])
+        js_string_path = temp_test_files["js_path"]
 
         comp = BidiComponentDefinition(
             name="test",
-            js=js_pathlib,
+            js=js_string_path,
         )
 
         assert comp.js_content is None  # JS content is None because it's a path
-        assert comp.js_url == f"{js_pathlib.name}"
+        assert comp.js_url == f"{os.path.basename(js_string_path)}"
         assert comp.source_paths["js"] == os.path.dirname(temp_test_files["js_path"])
 
 

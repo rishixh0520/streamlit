@@ -18,7 +18,7 @@ import { FC, memo, PropsWithChildren, useCallback, useMemo } from "react"
 
 import type { BidiComponent as BidiComponentProto } from "@streamlit/protobuf"
 
-import { WidgetStateManager } from "~lib/WidgetStateManager"
+import { WidgetInfo, WidgetStateManager } from "~lib/WidgetStateManager"
 import {
   BidiComponentContext,
   BidiComponentContextShape,
@@ -50,10 +50,17 @@ export const BidiComponentContextProvider: FC<
     mixed,
   } = element
 
+  const widgetInfo = useMemo<WidgetInfo>(() => {
+    return {
+      id: element.id,
+      formId: element.formId,
+    }
+  }, [element.id, element.formId])
+
   const getWidgetValue = useCallback(() => {
-    const value = widgetMgr.getJsonValue(element)
+    const value = widgetMgr.getJsonValue(widgetInfo)
     return value ? JSON.parse(value) : {}
-  }, [element, widgetMgr])
+  }, [widgetInfo, widgetMgr])
 
   const parsedData = useMemo(() => {
     switch (data) {

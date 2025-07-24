@@ -27,7 +27,6 @@ from streamlit.components.v2.get_bidi_component_manager import (
 from streamlit.errors import StreamlitAPIException
 
 if TYPE_CHECKING:
-    from pathlib import Path
     from types import FrameType
 
     from streamlit.components.v2.bidi_component import BidiComponentResult
@@ -44,8 +43,8 @@ _LOGGER = logging.getLogger(__name__)
 def _register_component(
     name: str,
     html: str | None = None,
-    css: str | Path | None = None,
-    js: str | Path | None = None,
+    css: str | None = None,
+    js: str | None = None,
 ) -> str:
     """Register a component and return its fully qualified key.
 
@@ -59,18 +58,29 @@ def _register_component(
         A short, descriptive identifier for the component.
     html : str or None
         Inline HTML markup for the component root.
-    css : str, Path, or None
+    css : str or None
         Inline CSS or path to a ``.css`` file.
-    js : str, Path, or None
+    js : str or None
         Inline JavaScript or path to a ``.js`` file.
 
     Returns
     -------
     str
-        The fully qualified component key in the form ``<module_name>.<name>``.
+        The fully qualified component key in the form ``<module_name>.<n>``.
     """
+    # Defensive type checks
+    if css is not None and not isinstance(css, str):
+        raise StreamlitAPIException(
+            f"css parameter must be a string or None, got {type(css).__name__}. "
+        )
+
+    if js is not None and not isinstance(js, str):
+        raise StreamlitAPIException(
+            f"js parameter must be a string or None, got {type(js).__name__}. "
+        )
+
     # Inspect the *call-site* to derive the caller's module and build a fully
-    # qualified component key in the form ``<module_name>.<name>``. This mirrors
+    # qualified component key in the form ``<module_name>.<n>``. This mirrors
     # the behavior of Components V1 and prevents cross-module name collisions.
 
     current_frame: FrameType | None = inspect.currentframe()
@@ -128,8 +138,8 @@ def _create_component_callable(
     name: str,
     *,
     html: str | None = None,
-    css: str | Path | None = None,
-    js: str | Path | None = None,
+    css: str | None = None,
+    js: str | None = None,
     return_type: str = "result",
 ) -> Callable[..., Any]:
     """Create a component callable, handling both lookup and registration cases.
@@ -143,9 +153,9 @@ def _create_component_callable(
         A short, descriptive identifier for the component.
     html : str or None
         Inline HTML markup for the component root.
-    css : str, Path, or None
+    css : str or None
         Inline CSS or path to a ``.css`` file.
-    js : str, Path, or None
+    js : str or None
         Inline JavaScript or path to a ``.js`` file.
     return_type : str
         Either "result" for BidiComponentResult or "dg" for BidiComponentDeltaGenerator.
@@ -156,6 +166,17 @@ def _create_component_callable(
         A function that, when called inside a Streamlit script, mounts the
         component and returns its state.
     """
+    # Defensive type checks
+    if css is not None and not isinstance(css, str):
+        raise StreamlitAPIException(
+            f"css parameter must be a string or None, got {type(css).__name__}. "
+        )
+
+    if js is not None and not isinstance(js, str):
+        raise StreamlitAPIException(
+            f"js parameter must be a string or None, got {type(js).__name__}. "
+        )
+
     # Check if this is a lookup for a pre-registered component from `pyproject.toml`.
     if html is None and css is None and js is None:
         # Look up component in registry by fully qualified name
@@ -278,8 +299,8 @@ def component_dg(
     name: str,
     *,
     html: str | None = None,
-    css: str | Path | None = None,
-    js: str | Path | None = None,
+    css: str | None = None,
+    js: str | None = None,
 ) -> Callable[
     ...,  # positional args prohibited; enforce keyword-only at call-time
     BidiComponentDeltaGenerator,
@@ -292,9 +313,9 @@ def component_dg(
         A short, descriptive identifier for the component.
     html : str or None
         Inline HTML markup for the component root.
-    css : str, Path, or None
+    css : str or None
         Inline CSS or path to a ``.css`` file.
-    js : str, Path, or None
+    js : str or None
         Inline JavaScript or path to a ``.js`` file.
 
     Returns
@@ -310,8 +331,8 @@ def component(
     name: str,
     *,
     html: str | None = None,
-    css: str | Path | None = None,
-    js: str | Path | None = None,
+    css: str | None = None,
+    js: str | None = None,
 ) -> Callable[
     ...,  # positional args prohibited; enforce keyword-only at call-time
     BidiComponentResult,
@@ -324,9 +345,9 @@ def component(
         A short, descriptive identifier for the component.
     html : str or None
         Inline HTML markup for the component root.
-    css : str, Path, or None
+    css : str or None
         Inline CSS or path to a ``.css`` file.
-    js : str, Path, or None
+    js : str or None
         Inline JavaScript or path to a ``.js`` file.
 
     Returns

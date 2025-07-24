@@ -24,4 +24,8 @@ def test_incorrect_js_component(app: Page):
 
 
 def test_incorrect_css_path_component(app: Page):
-    expect(app.get_by_text("ValueError: File does not exist:")).to_be_visible()
+    expect(
+        app.get_by_text(
+            "streamlit.errors.StreamlitAPIException: css parameter must be a string or None, got PosixPath."
+        )
+    ).to_be_visible()
