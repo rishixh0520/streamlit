@@ -79,7 +79,6 @@ def my_component_dg(
     data: Any | None = None,
     on_range_change: WidgetCallback | None = None,
     on_text_value_change: WidgetCallback | None = None,
-    # on_text_change: WidgetCallback | None = None,
 ) -> BidiComponentDeltaGenerator:
     out = _my_component_dg(
         isolate_styles=True,
@@ -87,7 +86,6 @@ def my_component_dg(
         data=data,
         on_range_change=on_range_change,
         on_text_value_change=on_text_value_change,
-        # on_text_change=on_text_change,
     )
     return out
 
@@ -110,7 +108,6 @@ result_dg = my_component_dg(
     key="my_component_2",
     on_range_change=handle_range_change,
     on_text_value_change=handle_text_value_change,
-    # on_text_change=handle_text_value_change,
 )
 result_dg.write("Hello from result_dg.write")
 

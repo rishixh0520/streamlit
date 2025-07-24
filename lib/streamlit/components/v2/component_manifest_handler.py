@@ -131,9 +131,9 @@ class ComponentManifestHandler:
         self, js_pattern: str | None, css_pattern: str | None
     ) -> bool:
         """Check if component should be tracked for file watching."""
-        return (js_pattern and ComponentPathUtils.has_glob_characters(js_pattern)) or (
-            css_pattern and ComponentPathUtils.has_glob_characters(css_pattern)
-        )
+        return bool(
+            js_pattern and ComponentPathUtils.has_glob_characters(js_pattern)
+        ) or bool(css_pattern and ComponentPathUtils.has_glob_characters(css_pattern))
 
     def _resolve_component_path(
         self, pattern: str | None, package_root: Path

@@ -299,7 +299,7 @@ class BidiComponentSerde:
             deserialized_value = ui_value
         elif ui_value is not None:
             try:
-                parsed = json.loads(ui_value)
+                parsed = json.loads(ui_value)  # ty: ignore[invalid-argument-type]
                 deserialized_value = parsed if isinstance(parsed, dict) else {}
             except Exception:
                 deserialized_value = {}

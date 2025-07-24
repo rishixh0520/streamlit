@@ -203,7 +203,9 @@ def use_bokeh():
 
     # Create Bokeh figure
     bokeh_figure = figure(
-        title="Simple Line Example", x_axis_label="x", y_axis_label="y"
+        title="Simple Line Example",
+        x_axis_label="x",  # ty: ignore[invalid-argument-type]
+        y_axis_label="y",  # ty: ignore[invalid-argument-type]
     )
     bokeh_figure.line(x, y, legend_label="Trend", line_width=2)
 
