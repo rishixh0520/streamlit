@@ -34,7 +34,7 @@ export const reconstructMixedData = (
 ): unknown => {
   // If the data itself is an Arrow reference, replace it
   if (data && typeof data === "object" && !Array.isArray(data)) {
-    if (data && typeof data[ARROW_REF_KEY] === "string") {
+    if (typeof data[ARROW_REF_KEY] === "string") {
       const refId = data[ARROW_REF_KEY]
       const arrowBytes = arrowBlobs[refId]
       if (arrowBytes) {
