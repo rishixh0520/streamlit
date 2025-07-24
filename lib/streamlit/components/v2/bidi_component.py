@@ -343,7 +343,7 @@ class BidiComponentMixin:
         default: dict[str, Any] | None = None,
         width: Width = "stretch",
         height: Height = "content",
-        return_type: str = "dict",
+        return_type: str | None = "dict",
         **kwargs: WidgetCallback | None,
     ) -> BidiComponentDeltaGenerator | BidiComponentResult:
         """Add a bidirectional component instance to the app using a registered component.

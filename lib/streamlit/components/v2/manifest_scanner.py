@@ -130,7 +130,9 @@ def _find_package_pyproject_toml(dist: importlib.metadata.Distribution) -> Path 
                                 if (
                                     pyproject_path.exists()
                                     and _validate_pyproject_for_package(
-                                        pyproject_path, dist.name, package_name
+                                        pyproject_path,
+                                        dist.name,  # type: ignore[attr-defined]
+                                        package_name,
                                     )
                                 ):
                                     return pyproject_path
@@ -149,7 +151,9 @@ def _find_package_pyproject_toml(dist: importlib.metadata.Distribution) -> Path 
                 try:
                     pyproject_path = Path(dist.locate_file(file))
                     if _validate_pyproject_for_package(
-                        pyproject_path, dist.name, package_name
+                        pyproject_path,
+                        dist.name,  # type: ignore[attr-defined]
+                        package_name,
                     ):
                         return pyproject_path
                 except Exception:  # noqa: S112
@@ -169,7 +173,9 @@ def _find_package_pyproject_toml(dist: importlib.metadata.Distribution) -> Path 
             for search_dir in [package_dir, package_dir.parent]:
                 pyproject_path = search_dir / "pyproject.toml"
                 if pyproject_path.exists() and _validate_pyproject_for_package(
-                    pyproject_path, dist.name, package_name
+                    pyproject_path,
+                    dist.name,  # type: ignore[attr-defined]
+                    package_name,
                 ):
                     return pyproject_path
     except Exception:  # noqa: S110
@@ -333,7 +339,11 @@ def _process_single_package(
 
         except Exception as e:
             # Log but don't fail if one package has issues
-            _LOGGER.debug("Failed to parse pyproject.toml for %s: %s", dist.name, e)
+            _LOGGER.debug(
+                "Failed to parse pyproject.toml for %s: %s",
+                dist.name,  # type: ignore[attr-defined]
+                e,
+            )
             return None
 
     except Exception:
@@ -359,7 +369,7 @@ def scan_component_manifests(
     list[tuple[ComponentManifest, Path]]
         List of tuples containing manifests and their package root paths.
     """
-    manifests = []
+    manifests: list[tuple[ComponentManifest, Path]] = []
 
     # Get all distributions first (this is fast)
     all_distributions = list(importlib.metadata.distributions())
@@ -402,7 +412,7 @@ def scan_component_manifests(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         future_to_dist = {
-            executor.submit(_process_single_package, dist): dist.name
+            executor.submit(_process_single_package, dist): dist.name  # type: ignore[attr-defined]
             for dist in candidate_distributions
         }
 

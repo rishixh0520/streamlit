@@ -226,6 +226,7 @@ def _create_component_callable(
                     width=width,
                     height=height,
                     isolate_styles=isolate_styles,
+                    return_type="dict",
                     **on_callbacks,
                 )
 

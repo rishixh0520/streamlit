@@ -158,7 +158,7 @@ class BidiComponentManager:
         self._file_watcher.start_file_watching(glob_watchers)
 
         if self._file_watcher.is_watching_active:
-            _LOGGER.debug("Started file watching for component changes")
+            _LOGGER.debug("Started file watching for component changes")  # type: ignore[unreachable]
         else:
             _LOGGER.debug("File watching not started (likely not in development mode)")
 

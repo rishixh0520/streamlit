@@ -74,7 +74,7 @@ class BidiComponentDeltaGenerator(DeltaGenerator):
     ) -> BidiComponentDeltaGenerator:
         """Factory method following the pattern of Dialog and StatusContainer."""
         # Validate state names before creating the component
-        all_state_names = set()
+        all_state_names: set[str] = set()
         if default:
             all_state_names.update(default.keys())
         if callbacks_by_event:
@@ -232,7 +232,10 @@ class BidiComponentDeltaGenerator(DeltaGenerator):
             return self._default[key]
         return default
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> Self:  # type: ignore[override]
+        # This is a little dubious: we're returning a different type than
+        # our superclass' `__enter__` function. Maybe DeltaGenerator.__enter__
+        # should always return `self`?
         """Support usage as a context manager."""
         super().__enter__()
         return self

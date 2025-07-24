@@ -46,7 +46,8 @@ with st.echo():
         component = st.components.v2.component(
             "incorrectCssPathComponent",
             html="""<h1>The CSS path is incorrect</h1>""",
-            css=Path(__file__).parent / "incorrect_css_path.css",
+            # Intentionally incorrect CSS path to test error handling
+            css=Path(__file__).parent / "incorrect_css_path.css",  # type: ignore[arg-type]
         )
 
         return component()
