@@ -202,6 +202,16 @@ def make_trigger_id(base: str, event: str) -> str:
     return f"{base}{EVENT_DELIM}{event}"
 
 
+def handle_deserialize(s: str | None) -> Any:
+    """Deserialize a JSON string or return the string as-is if it's not valid JSON."""
+    if s is None:
+        return None
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        return f"{s}"
+
+
 # ----------------------------------------------------------------------
 # Public state typing
 # ----------------------------------------------------------------------
@@ -652,7 +662,7 @@ class BidiComponentMixin:
 
             trig_state = register_widget(
                 trig_id,
-                deserializer=lambda s: json.loads(s) if s else None,
+                deserializer=handle_deserialize,
                 serializer=lambda v: json.dumps(v),
                 ctx=ctx,
                 callbacks={"change": evt_cb} if evt_cb is not None else None,
