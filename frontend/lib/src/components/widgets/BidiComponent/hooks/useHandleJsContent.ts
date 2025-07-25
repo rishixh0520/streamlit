@@ -129,6 +129,7 @@ export const useHandleJsContent = ({
     id,
     jsContent,
     jsSourcePath,
+    theme,
     widgetMgr,
   } = useRequiredContext(BidiComponentContext)
 
@@ -259,5 +260,7 @@ export const useHandleJsContent = ({
     setError,
     skip,
     widgetMgr,
+    // We want to re-run the JS content if the theme changes
+    theme,
   ])
 }

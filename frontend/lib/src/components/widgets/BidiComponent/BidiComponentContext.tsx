@@ -16,7 +16,7 @@
 
 import { createContext } from "react"
 
-import { ComponentState } from "@streamlit/component-v2-lib"
+import { ComponentState, StreamlitTheme } from "@streamlit/component-v2-lib"
 
 import { WidgetStateManager } from "~lib/WidgetStateManager"
 
@@ -34,6 +34,7 @@ export type BidiComponentContextShape<
   id: string
   jsContent: string | undefined
   jsSourcePath: string | undefined
+  theme: StreamlitTheme
   widgetMgr: WidgetStateManager
 }
 

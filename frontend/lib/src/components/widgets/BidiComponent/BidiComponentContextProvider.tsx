@@ -24,6 +24,8 @@ import {
   BidiComponentContextShape,
 } from "~lib/components/widgets/BidiComponent/BidiComponentContext"
 import { reconstructMixedData } from "~lib/components/widgets/BidiComponent/utils/reconstructMixedData"
+import { extractComponentsV2Theme } from "~lib/components/widgets/BidiComponent/utils/theme"
+import { useEmotionTheme } from "~lib/hooks/useEmotionTheme"
 import { assertNever } from "~lib/util/assertNever"
 
 export type BidiComponentContextProviderProps = {
@@ -105,6 +107,11 @@ export const BidiComponentContextProvider: FC<
     return undefined
   }, [data, json, arrow, bytes, mixed])
 
+  const emotionTheme = useEmotionTheme()
+  const theme = useMemo(() => {
+    return extractComponentsV2Theme(emotionTheme)
+  }, [emotionTheme])
+
   const contextValue = useMemo<BidiComponentContextShape>(() => {
     return {
       componentName,
@@ -117,6 +124,7 @@ export const BidiComponentContextProvider: FC<
       id,
       jsContent: jsContent || undefined,
       jsSourcePath: jsSourcePath || undefined,
+      theme,
       widgetMgr,
     }
   }, [
@@ -129,8 +137,9 @@ export const BidiComponentContextProvider: FC<
     id,
     jsContent,
     jsSourcePath,
-    widgetMgr,
     parsedData,
+    theme,
+    widgetMgr,
   ])
 
   return (

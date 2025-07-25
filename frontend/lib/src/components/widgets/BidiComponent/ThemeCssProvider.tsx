@@ -16,51 +16,10 @@
 
 import { FC, PropsWithChildren, useMemo } from "react"
 
-import kebabCase from "lodash/kebabCase"
-
-import {
-  StreamlitTheme,
-  StreamlitThemeCssProperties,
-} from "@streamlit/component-v2-lib"
-
+import { BidiComponentContext } from "~lib/components/widgets/BidiComponent/BidiComponentContext"
 import { StyledThemeCssProvider } from "~lib/components/widgets/BidiComponent/styled-components"
-import { useEmotionTheme } from "~lib/hooks/useEmotionTheme"
-import { EmotionTheme } from "~lib/theme"
-
-/**
- * Converts an object to CSS custom properties
- * with the --st- prefix and kebab-case naming
- */
-export const objectToCssCustomProperties = (
-  obj: StreamlitTheme,
-  prefix = "--st"
-): StreamlitThemeCssProperties => {
-  const result: Record<string, string> = {}
-
-  Object.entries(obj).forEach(([key, value]) => {
-    const kebabKey = kebabCase(key)
-    const propertyName = `${prefix}-${kebabKey}`
-    result[propertyName] = String(value)
-  })
-
-  return result as StreamlitThemeCssProperties
-}
-
-/**
- * Extracts only the properties defined in ComponentsV2Theme from the emotion theme
- */
-const extractComponentsV2Theme = (theme: EmotionTheme): StreamlitTheme => {
-  const result: StreamlitTheme = {
-    base: theme.colors.base,
-    primaryColor: theme.colors.primary,
-    backgroundColor: theme.colors.bgColor,
-    secondaryBackgroundColor: theme.colors.secondaryBg,
-    textColor: theme.colors.bodyText,
-    font: theme.fonts.sansSerif,
-  }
-
-  return result
-}
+import { objectToCssCustomProperties } from "~lib/components/widgets/BidiComponent/utils/theme"
+import { useRequiredContext } from "~lib/hooks/useRequiredContext"
 
 /**
  * ThemeCssProvider is a component that provides selected Emotion theme properties
@@ -68,11 +27,10 @@ const extractComponentsV2Theme = (theme: EmotionTheme): StreamlitTheme => {
  * Only properties defined in ComponentsV2Theme are exposed as CSS custom properties.
  */
 export const ThemeCssProvider: FC<PropsWithChildren> = ({ children }) => {
-  const theme = useEmotionTheme()
+  const { theme } = useRequiredContext(BidiComponentContext)
 
   const cssCustomProperties = useMemo(() => {
-    const componentsV2Theme = extractComponentsV2Theme(theme)
-    return objectToCssCustomProperties(componentsV2Theme)
+    return objectToCssCustomProperties(theme)
   }, [theme])
 
   return (
