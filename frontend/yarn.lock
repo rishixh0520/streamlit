@@ -3830,6 +3830,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@streamlit/component-v2-lib@workspace:component-v2-lib"
   dependencies:
+    eslint: "npm:^9.31.0"
+    prettier: "npm:^3.6.2"
     typescript: "npm:^5.8.3"
     typesync: "npm:^0.14.3"
     vite: "npm:^7.0.6"
