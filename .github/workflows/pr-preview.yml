@@ -530,8 +530,9 @@ jobs:
 
             // Define the ready template once
             const componentPackageBuilt = '${{ needs.build-component-v2-lib.outputs.package-built }}';
+            const workflowRunUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const componentRow = componentPackageBuilt === 'true' ?
-              "| 📦 \`@streamlit/component-v2-lib\` | Available in workflow artifacts |\n" :
+              "| 📦 \`@streamlit/component-v2-lib\` | [Download from artifacts](${workflowRunUrl}) |\n" :
               "| 📦 \`@streamlit/component-v2-lib\` | *Build failed* |\n";
 
             const readyTemplate = "### ✅ PR preview is ready!\n\n" +
