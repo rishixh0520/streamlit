@@ -17,22 +17,23 @@
 import React, { useContext, useEffect, useId, useMemo } from "react"
 
 import {
+  ComponentArgs,
+  ComponentResult,
+  ComponentState,
+} from "@streamlit/component-v2-lib"
+
+import { LibContext } from "~lib/components/core/LibContext"
+import { BidiComponentContext } from "~lib/components/widgets/BidiComponent/BidiComponentContext"
+import {
   handleError,
   normalizeError,
 } from "~lib/components/widgets/BidiComponent/utils/error"
-import type { WidgetStateManager } from "~lib/WidgetStateManager"
-import { LibContext } from "~lib/components/core/LibContext"
-import { BidiComponentContext } from "~lib/components/widgets/BidiComponent/BidiComponentContext"
 import { makeTriggerId } from "~lib/components/widgets/BidiComponent/utils/idBuilder"
 import { LOG } from "~lib/components/widgets/BidiComponent/utils/logger"
 import { useRequiredContext } from "~lib/hooks/useRequiredContext"
-import type {
-  BidiComponentState,
-  ComponentResult,
-  StV2ComponentArgs,
-} from "~lib/components/widgets/BidiComponent/types"
+import type { WidgetStateManager } from "~lib/WidgetStateManager"
 
-const loadAndRunModule = async <T extends BidiComponentState>({
+const loadAndRunModule = async <T extends ComponentState>({
   componentId,
   componentIdForWidgetMgr,
   componentName,
@@ -63,7 +64,7 @@ const loadAndRunModule = async <T extends BidiComponentState>({
     throw new Error("JS module does not have a default export function.")
   }
 
-  const setStateValue = <T extends BidiComponentState>(
+  const setStateValue = <T extends ComponentState>(
     name: string,
     value: T[keyof T]
   ): void => {
@@ -86,7 +87,7 @@ const loadAndRunModule = async <T extends BidiComponentState>({
     )
   }
 
-  const setTriggerValue = <T extends BidiComponentState>(
+  const setTriggerValue = <T extends ComponentState>(
     name: string,
     value: T[keyof T]
   ): void => {
@@ -99,18 +100,14 @@ const loadAndRunModule = async <T extends BidiComponentState>({
     )
   }
 
-  const cleanup = module.default({
+  return module.default({
     name: componentName,
     data,
     key: componentId,
     parentElement,
     setStateValue,
     setTriggerValue,
-  } satisfies StV2ComponentArgs)
-
-  return {
-    cleanup: typeof cleanup === "function" ? cleanup : undefined,
-  }
+  } satisfies ComponentArgs)
 }
 
 export const useHandleJsContent = ({
@@ -161,7 +158,7 @@ export const useHandleJsContent = ({
     }
 
     let isMounted = true
-    let cleanup: ComponentResult["cleanup"]
+    let cleanup: ComponentResult
     let scriptElement: HTMLScriptElement | undefined
 
     const run = async (): Promise<void> => {
@@ -172,7 +169,7 @@ export const useHandleJsContent = ({
             jsContent
           )}`
 
-          const result = await loadAndRunModule({
+          cleanup = await loadAndRunModule({
             componentId,
             componentIdForWidgetMgr: id,
             componentName,
@@ -183,8 +180,6 @@ export const useHandleJsContent = ({
             parentElement: containerRefCurrent,
             widgetMgr,
           })
-
-          cleanup = result.cleanup
         }
         // Handle external JS file
         else if (jsSourcePathUrl) {
@@ -206,7 +201,7 @@ export const useHandleJsContent = ({
             })
 
             // Run the module
-            const result = await loadAndRunModule({
+            cleanup = await loadAndRunModule({
               componentId,
               componentIdForWidgetMgr: id,
               componentName,
@@ -217,8 +212,6 @@ export const useHandleJsContent = ({
               parentElement: containerRefCurrent,
               widgetMgr,
             })
-
-            cleanup = result.cleanup
           } catch (error) {
             throw normalizeError(
               error,
@@ -241,7 +234,9 @@ export const useHandleJsContent = ({
 
       if (cleanup) {
         try {
-          cleanup()
+          void Promise.resolve(cleanup).then(result => {
+            result?.()
+          })
         } catch (error) {
           LOG.error(`Failed to run cleanup for element ${id}`, error)
         }

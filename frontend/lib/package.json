@@ -58,6 +58,7 @@
     "@loaders.gl/csv": "^4.3.4",
     "@loaders.gl/gltf": "^4.3.4",
     "@sindresorhus/slugify": "^2.2.1",
+    "@streamlit/component-v2-lib": "workspace:^",
     "@streamlit/protobuf": "workspace:^",
     "@streamlit/utils": "workspace:^",
     "apache-arrow": "^21.0.0",

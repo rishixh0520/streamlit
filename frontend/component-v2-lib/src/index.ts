@@ -14,22 +14,5 @@
  * limitations under the License.
  */
 
-import styled from "@emotion/styled"
-
-import { StreamlitThemeCssProperties } from "@streamlit/component-v2-lib"
-
-type StyledThemeCssProviderProps = {
-  cssCustomProperties: StreamlitThemeCssProperties
-}
-
-export const StyledThemeCssProvider = styled.div(
-  ({ cssCustomProperties }: StyledThemeCssProviderProps) => ({
-    ...cssCustomProperties,
-    /**
-     * Since this div is only used for applying CSS custom properties to the
-     * children, we don't want to add any additional styling or unnecessary DOM
-     * elements to the layout tree.
-     */
-    display: "contents",
-  })
-)
+export * from "./theme"
+export * from "./types"

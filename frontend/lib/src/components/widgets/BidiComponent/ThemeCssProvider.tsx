@@ -14,55 +14,65 @@
  * limitations under the License.
  */
 
-import { CSSProperties, FC, PropsWithChildren, useMemo } from "react"
+import { FC, PropsWithChildren, useMemo } from "react"
 
-import isObject from "lodash/isObject"
 import kebabCase from "lodash/kebabCase"
+
+import {
+  StreamlitTheme,
+  StreamlitThemeCssProperties,
+} from "@streamlit/component-v2-lib"
 
 import { StyledThemeCssProvider } from "~lib/components/widgets/BidiComponent/styled-components"
 import { useEmotionTheme } from "~lib/hooks/useEmotionTheme"
+import { EmotionTheme } from "~lib/theme"
 
 /**
- * Recursively converts a nested object to CSS custom properties
+ * Converts an object to CSS custom properties
  * with the --st- prefix and kebab-case naming
  */
 export const objectToCssCustomProperties = (
-  obj: Record<string, unknown>,
+  obj: StreamlitTheme,
   prefix = "--st"
-): CSSProperties => {
+): StreamlitThemeCssProperties => {
   const result: Record<string, string> = {}
 
-  const traverse = (
-    current: Record<string, unknown>,
-    currentPrefix: string
-  ): void => {
-    Object.entries(current).forEach(([key, value]) => {
-      const kebabKey = kebabCase(key)
-      const propertyName = `${currentPrefix}-${kebabKey}`
+  Object.entries(obj).forEach(([key, value]) => {
+    const kebabKey = kebabCase(key)
+    const propertyName = `${prefix}-${kebabKey}`
+    result[propertyName] = String(value)
+  })
 
-      if (isObject(value)) {
-        // Recursively traverse nested objects
-        traverse(value as Record<string, unknown>, propertyName)
-      } else {
-        // Convert the value to string for CSS custom properties
-        result[propertyName] = String(value)
-      }
-    })
-  }
-
-  traverse(obj, prefix)
-  return result as CSSProperties
+  return result as StreamlitThemeCssProperties
 }
 
 /**
- * ThemeCssProvider is a component that provides the current Emotion theme as
- * CSS custom properties by applying them to a wrapping element.
+ * Extracts only the properties defined in ComponentsV2Theme from the emotion theme
+ */
+const extractComponentsV2Theme = (theme: EmotionTheme): StreamlitTheme => {
+  const result: StreamlitTheme = {
+    base: theme.colors.base,
+    primaryColor: theme.colors.primary,
+    backgroundColor: theme.colors.bgColor,
+    secondaryBackgroundColor: theme.colors.secondaryBg,
+    textColor: theme.colors.bodyText,
+    font: theme.fonts.sansSerif,
+  }
+
+  return result
+}
+
+/**
+ * ThemeCssProvider is a component that provides selected Emotion theme properties
+ * as CSS custom properties by applying them to a wrapping element.
+ * Only properties defined in ComponentsV2Theme are exposed as CSS custom properties.
  */
 export const ThemeCssProvider: FC<PropsWithChildren> = ({ children }) => {
   const theme = useEmotionTheme()
 
   const cssCustomProperties = useMemo(() => {
-    return objectToCssCustomProperties(theme)
+    const componentsV2Theme = extractComponentsV2Theme(theme)
+    return objectToCssCustomProperties(componentsV2Theme)
   }, [theme])
 
   return (

@@ -15,41 +15,58 @@
  */
 
 /**
- * The base type of the returned state from a Bidi Component.
- * Users can extend this type to add their own state key/value pairs.
+ * The base type of the returned state from a Streamlit v2 Component. Authors
+ * can extend this type to add their own state key/value pairs, or utilize their
+ * own type by providing it as the first generic parameter to `ComponentArgs`.
  *
  * @see BidiComponentState in lib/streamlit/components/v2/bidi_component.py
  */
-export type BidiComponentState = Record<string, unknown>
+export type ComponentState = Record<string, unknown>
 
 export type ArrowData = Uint8Array<ArrayBufferLike> | null
 
-// TODO: Expose this in `streamlit-component-lib` so that component authors can
-// use it.
-export type StV2ComponentArgs<
-  ComponentState extends BidiComponentState = BidiComponentState,
+/**
+ * The arguments passed to a Streamlit v2 Component's top-level
+ * `export default` function.
+ */
+export type ComponentArgs<
+  TComponentState extends ComponentState = ComponentState,
   /**
    * The shape of the data passed to the component.
    * Users should provide this type for type safety.
    *
    * @see st.bidi_component in lib/streamlit/components/v2/__init__.py
    */
-  DataShape = unknown,
+  TDataShape = unknown,
 > = {
-  data: DataShape
+  data: TDataShape
   key: string
   name: string
   parentElement: HTMLElement | ShadowRoot
   setStateValue: (
-    name: keyof ComponentState,
-    value: ComponentState[keyof ComponentState]
+    name: keyof TComponentState,
+    value: TComponentState[keyof TComponentState]
   ) => void
   setTriggerValue: (
-    name: keyof ComponentState,
-    value: ComponentState[keyof ComponentState]
+    name: keyof TComponentState,
+    value: TComponentState[keyof TComponentState]
   ) => void
 }
 
-export type ComponentResult = {
-  cleanup?: () => void
-}
+export type ComponentResult =
+  | (() => void)
+  | void
+  // TODO: Technically, a Promise is undefined behavior, but we'll allow it
+  // for now.
+  | Promise<() => void>
+  | Promise<void>
+
+/**
+ * The Streamlit v2 Component signature.
+ */
+export type Component<
+  TComponentState extends ComponentState = ComponentState,
+  TDataShape = unknown,
+> = (
+  componentArgs: ComponentArgs<TComponentState, TDataShape>
+) => ComponentResult

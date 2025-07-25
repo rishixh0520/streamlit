@@ -16,11 +16,12 @@
 
 import { createContext } from "react"
 
+import { ComponentState } from "@streamlit/component-v2-lib"
+
 import { WidgetStateManager } from "~lib/WidgetStateManager"
-import { BidiComponentState } from "~lib/components/widgets/BidiComponent/types"
 
 export type BidiComponentContextShape<
-  ComponentState extends BidiComponentState = BidiComponentState,
+  TComponentState extends ComponentState = ComponentState,
   DataShape = unknown,
 > = {
   componentName: string
@@ -28,7 +29,7 @@ export type BidiComponentContextShape<
   cssSourcePath: string | undefined
   data: DataShape
   fragmentId: string | undefined
-  getWidgetValue: () => ComponentState
+  getWidgetValue: () => TComponentState
   htmlContent: string | undefined
   id: string
   jsContent: string | undefined
