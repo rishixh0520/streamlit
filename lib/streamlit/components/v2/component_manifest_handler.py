@@ -88,13 +88,8 @@ class ComponentManifestHandler:
                     component_name=comp_name,
                     manifest=manifest,
                     package_root=package_root,
-                    js_pattern=js_pattern
-                    if js_pattern and ComponentPathUtils.has_glob_characters(js_pattern)
-                    else None,
-                    css_pattern=css_pattern
-                    if css_pattern
-                    and ComponentPathUtils.has_glob_characters(css_pattern)
-                    else None,
+                    js_pattern=js_pattern,
+                    css_pattern=css_pattern,
                 )
 
             # Resolve file paths
@@ -130,10 +125,13 @@ class ComponentManifestHandler:
     def _should_track_for_watching(
         self, js_pattern: str | None, css_pattern: str | None
     ) -> bool:
-        """Check if component should be tracked for file watching."""
-        return bool(
-            js_pattern and ComponentPathUtils.has_glob_characters(js_pattern)
-        ) or bool(css_pattern and ComponentPathUtils.has_glob_characters(css_pattern))
+        """Check if component should be tracked for file watching.
+
+        Returns True if either js_pattern or css_pattern exists (regardless
+        of whether they contain glob characters), as we want to watch both
+        glob patterns and direct file paths for changes.
+        """
+        return bool(js_pattern) or bool(css_pattern)
 
     def _resolve_component_path(
         self, pattern: str | None, package_root: Path
