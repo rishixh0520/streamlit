@@ -46,4 +46,18 @@ export default defineConfig({
       fileName: () => `streamlit-component-v2-lib.mjs`,
     },
   },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    css: true,
+    reporters: ["verbose"],
+    setupFiles: ["../vitest.setup.ts"],
+    deps: {
+      optimizer: {
+        web: {
+          include: ["vitest-canvas-mock"],
+        },
+      },
+    },
+  },
 })
