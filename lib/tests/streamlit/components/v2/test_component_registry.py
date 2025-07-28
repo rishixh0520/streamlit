@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from streamlit.components.v2 import component, component_dg
+from streamlit.components.v2 import component
 from streamlit.components.v2.component_manager import BidiComponentManager
 from streamlit.components.v2.component_path_utils import ComponentPathUtils
 from streamlit.components.v2.component_registry import (
@@ -180,9 +180,9 @@ def test_public_api_path_object_rejection() -> None:
     assert "css parameter must be a string or None" in error_msg
     assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
 
-    # Test component_dg() function with js parameter
+    # Test component() function with js parameter
     with pytest.raises(StreamlitAPIException) as exc_info:
-        component_dg("test", js=Path("test.js"))
+        component("test", js=Path("test.js"))
 
     error_msg = str(exc_info.value)
     assert "js parameter must be a string or None" in error_msg
@@ -190,7 +190,7 @@ def test_public_api_path_object_rejection() -> None:
 
     # Test component_dg() function with css parameter
     with pytest.raises(StreamlitAPIException) as exc_info:
-        component_dg("test", css=Path("test.css"))
+        component("test", css=Path("test.css"))
 
     error_msg = str(exc_info.value)
     assert "css parameter must be a string or None" in error_msg

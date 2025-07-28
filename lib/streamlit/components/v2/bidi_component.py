@@ -46,9 +46,6 @@ from streamlit.util import AttributeDictionary
 if TYPE_CHECKING:
     # Define DeltaGenerator for type checking the dg property
     from streamlit.delta_generator import DeltaGenerator
-    from streamlit.elements.lib.bidi_component_delta_generator import (
-        BidiComponentDeltaGenerator,
-    )
     from streamlit.runtime.state.common import WidgetCallback
 
 
@@ -348,14 +345,12 @@ class BidiComponentMixin:
         *args: Any,
         key: str | None = None,
         isolate_styles: bool = True,
-        # TODO: This needs to have a better type + support Arrow
         data: Any | None = None,
         default: dict[str, Any] | None = None,
         width: Width = "stretch",
         height: Height = "content",
-        return_type: str | None = "dict",
         **kwargs: WidgetCallback | None,
-    ) -> BidiComponentDeltaGenerator | BidiComponentResult:
+    ) -> BidiComponentResult:
         """Add a bidirectional component instance to the app using a registered component.
 
         Parameters
@@ -383,19 +378,13 @@ class BidiComponentMixin:
             The width of the component.
         height : Height
             The height of the component.
-        return_type : str
-            The type of object to return. Must be either "dg" for
-            BidiComponentDeltaGenerator or "dict" for BidiComponentResult.
-            Defaults to "dict" for backward compatibility.
         **kwargs
             Keyword arguments to pass to the component.
 
         Returns
         -------
-        BidiComponentDeltaGenerator | BidiComponentResult
-            A DeltaGenerator that provides state access for bidirectional components
-            (when return_type="dg") or a dictionary-like result object
-            (when return_type="dict").
+        BidiComponentResult
+            A dictionary-like result object.
 
         Raises
         ------
@@ -406,37 +395,13 @@ class BidiComponentMixin:
         """
         check_cache_replay_rules()
 
-        # Validate return_type parameter
-        if return_type not in ("dg", "dict"):
-            raise StreamlitAPIException(
-                f"return_type must be either 'dg' or 'dict', got '{return_type}'"
-            )
-
         key = to_key(key)
         ctx = get_script_run_ctx()
 
         if ctx is None:
             # Create an empty state with the default value and return it
             state: BidiComponentState = {"value": {}}
-            if return_type == "dict":
-                return BidiComponentResult(self.dg, state.get("value", {}), {})
-            from streamlit.elements.lib.bidi_component_delta_generator import (
-                BidiComponentDeltaGenerator,
-            )
-
-            # Create a minimal proto for the DeltaGenerator
-            bidi_component_proto = BidiComponentProto()
-            bidi_component_proto.id = "dummy_id"
-            bidi_component_proto.component_name = component_name
-
-            return BidiComponentDeltaGenerator._create(
-                parent=self.dg,
-                component_name=component_name,
-                component_instance_id="dummy_id",
-                proto=bidi_component_proto,
-                callbacks_by_event={},
-                default=default,
-            )
+            return BidiComponentResult(self.dg, state.get("value", {}), {})
 
         # Get the component definition from the registry
         from streamlit.runtime import Runtime
@@ -686,23 +651,8 @@ class BidiComponentMixin:
             layout_config=layout_config,
         )
 
-        # Return the appropriate result type based on return_type parameter
-        if return_type == "dict":
-            # Extract state values from the component state
-            state_vals = _unwrap_component_state(component_state.value)
-            return BidiComponentResult(self.dg, state_vals, trigger_vals)
-        from streamlit.elements.lib.bidi_component_delta_generator import (
-            BidiComponentDeltaGenerator,
-        )
-
-        return BidiComponentDeltaGenerator._create(
-            parent=self.dg,
-            component_name=component_name,
-            component_instance_id=computed_id,
-            proto=bidi_component_proto,
-            callbacks_by_event=callbacks_by_event,
-            default=default,
-        )
+        state_vals = _unwrap_component_state(component_state.value)
+        return BidiComponentResult(self.dg, state_vals, trigger_vals)
 
     @property
     def dg(self) -> DeltaGenerator:

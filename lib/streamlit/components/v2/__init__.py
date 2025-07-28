@@ -30,9 +30,6 @@ if TYPE_CHECKING:
     from types import FrameType
 
     from streamlit.components.v2.bidi_component import BidiComponentResult
-    from streamlit.elements.lib.bidi_component_delta_generator import (
-        BidiComponentDeltaGenerator,
-    )
     from streamlit.elements.lib.layout_utils import Height, Width
     from streamlit.runtime.state.common import WidgetCallback
 
@@ -48,9 +45,9 @@ def _register_component(
 ) -> str:
     """Register a component and return its fully qualified key.
 
-    This shared function handles the component registration logic for both
-    component() and component_dg(), including frame inspection, key generation,
-    and handling pre-registered components from pyproject.toml.
+    This shared function handles the component registration including frame
+    inspection, key generation, and handling pre-registered components from
+    pyproject.toml.
 
     Parameters
     ----------
@@ -87,7 +84,7 @@ def _register_component(
     if current_frame is None:
         raise RuntimeError("Unable to inspect current frame for component declaration.")
 
-    # Go up two frames: current -> component/component_dg -> user code
+    # Go up two frames: current -> component -> user code
     caller_frame = current_frame.f_back
     if caller_frame is None:
         raise RuntimeError(
@@ -140,12 +137,11 @@ def _create_component_callable(
     html: str | None = None,
     css: str | None = None,
     js: str | None = None,
-    return_type: str = "result",
 ) -> Callable[..., Any]:
     """Create a component callable, handling both lookup and registration cases.
 
-    This shared function handles the common logic for both component() and
-    component_dg(), including pre-registered component lookup and runtime registration.
+    This shared function handles the common logic including pre-registered
+    component lookup and runtime registration.
 
     Parameters
     ----------
@@ -157,8 +153,6 @@ def _create_component_callable(
         Inline CSS or path to a ``.css`` file.
     js : str or None
         Inline JavaScript or path to a ``.js`` file.
-    return_type : str
-        Either "result" for BidiComponentResult or "dg" for BidiComponentDeltaGenerator.
 
     Returns
     -------
@@ -206,18 +200,6 @@ def _create_component_callable(
             ) -> Any:
                 import streamlit as st
 
-                if return_type == "dg":
-                    return st.bidi_component(
-                        component_key,
-                        key=key,
-                        data=data,
-                        default=default,
-                        width=width,
-                        height=height,
-                        isolate_styles=isolate_styles,
-                        return_type="dg",
-                        **on_callbacks,
-                    )
                 return st.bidi_component(
                     component_key,
                     key=key,
@@ -226,7 +208,6 @@ def _create_component_callable(
                     width=width,
                     height=height,
                     isolate_styles=isolate_styles,
-                    return_type="dict",
                     **on_callbacks,
                 )
 
@@ -276,8 +257,8 @@ def _create_component_callable(
 
         Returns
         -------
-        Any
-            Component state (BidiComponentResult or BidiComponentDeltaGenerator).
+        BidiComponentResult
+            Component state.
         """
         import streamlit as st
 
@@ -289,43 +270,10 @@ def _create_component_callable(
             width=width,
             height=height,
             isolate_styles=isolate_styles,
-            return_type="dg" if return_type == "dg" else "dict",
             **on_callbacks,
         )
 
     return _mount_component
-
-
-def component_dg(
-    name: str,
-    *,
-    html: str | None = None,
-    css: str | None = None,
-    js: str | None = None,
-) -> Callable[
-    ...,  # positional args prohibited; enforce keyword-only at call-time
-    BidiComponentDeltaGenerator,
-]:
-    """Register a bidirectional component and return a callable to mount it.
-
-    Parameters
-    ----------
-    name : str
-        A short, descriptive identifier for the component.
-    html : str or None
-        Inline HTML markup for the component root.
-    css : str or None
-        Inline CSS or path to a ``.css`` file.
-    js : str or None
-        Inline JavaScript or path to a ``.js`` file.
-
-    Returns
-    -------
-    Callable[..., BidiComponentDeltaGenerator]
-        A function that, when called inside a Streamlit script, mounts the
-        component and returns its state as a ``BidiComponentDeltaGenerator``.
-    """
-    return _create_component_callable(name, html=html, css=css, js=js, return_type="dg")
 
 
 def component(
@@ -357,12 +305,9 @@ def component(
         A function that, when called inside a Streamlit script, mounts the
         component and returns its state as a ``BidiComponentResult``.
     """
-    return _create_component_callable(
-        name, html=html, css=css, js=js, return_type="result"
-    )
+    return _create_component_callable(name, html=html, css=css, js=js)
 
 
 __all__ = [
     "component",
-    "component_dg",
 ]
