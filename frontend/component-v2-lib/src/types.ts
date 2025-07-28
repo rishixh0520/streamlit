@@ -21,6 +21,11 @@
  *
  * @see BidiComponentState in lib/streamlit/components/v2/bidi_component.py
  */
+
+/* Re-export Apache Arrow types so that component authors can use them. This
+also allows us to keep our versions in sync. */
+export type { Table } from "apache-arrow"
+
 export type ComponentState = Record<string, unknown>
 
 export type ArrowData = Uint8Array<ArrayBufferLike> | null

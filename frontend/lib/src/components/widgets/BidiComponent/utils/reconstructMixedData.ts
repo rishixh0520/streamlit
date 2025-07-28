@@ -14,13 +14,26 @@
  * limitations under the License.
  */
 
-import { tableFromIPC } from "apache-arrow"
+import { Table, tableFromIPC } from "apache-arrow"
 
 import { ARROW_REF_KEY } from "~lib/components/widgets/BidiComponent/constants"
 
 type MixedData = {
   [ARROW_REF_KEY]: string
 }
+
+/**
+ * The type of the data that can be returned from parsing and reconstructing a
+ * Streamlit v2 Component's `data` parameter.
+ */
+type ParsedData =
+  | string
+  | number
+  | boolean
+  | null
+  | Array<unknown>
+  | Record<string, unknown>
+  | Table
 
 /**
  * Reconstruct data by replacing Arrow references with actual Arrow Tables
@@ -31,7 +44,7 @@ export const reconstructMixedData = (
   arrowBlobs: {
     [key: string]: Uint8Array<ArrayBufferLike>
   }
-): unknown => {
+): ParsedData => {
   // If the data itself is an Arrow reference, replace it
   if (data && typeof data === "object" && !Array.isArray(data)) {
     if (typeof data[ARROW_REF_KEY] === "string") {
