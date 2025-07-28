@@ -39,6 +39,7 @@ from streamlit.runtime.state.common import (
     RegisterWidgetResult,
     T,
     ValueFieldName,
+    WidgetArgs,
     WidgetMetadata,
     is_array_value_field_name,
     is_element_id,
@@ -572,7 +573,7 @@ class SessionState:
             def execute_callback(
                 callback_fn: WidgetCallback,
                 metadata: WidgetMetadata[Any],
-                metadata_args: tuple[Any, ...],
+                metadata_args: WidgetArgs,
                 metadata_kwargs: dict[str, Any],
             ) -> None:
                 ctx = get_script_run_ctx()
