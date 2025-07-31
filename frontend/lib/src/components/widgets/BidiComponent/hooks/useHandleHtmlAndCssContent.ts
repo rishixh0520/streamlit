@@ -17,10 +17,10 @@
 import React, { useContext, useEffect, useMemo, useRef } from "react"
 
 import { LibContext } from "~lib/components/core/LibContext"
-import { useRequiredContext } from "~lib/hooks/useRequiredContext"
 import { BidiComponentContext } from "~lib/components/widgets/BidiComponent/BidiComponentContext"
-import { LOG } from "~lib/components/widgets/BidiComponent/utils/logger"
 import { handleError } from "~lib/components/widgets/BidiComponent/utils/error"
+import { LOG } from "~lib/components/widgets/BidiComponent/utils/logger"
+import { useRequiredContext } from "~lib/hooks/useRequiredContext"
 
 /**
  * Safely inject HTML content including script tags

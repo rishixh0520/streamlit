@@ -18,7 +18,6 @@ import { FC, memo, PropsWithChildren, useCallback, useMemo } from "react"
 
 import type { BidiComponent as BidiComponentProto } from "@streamlit/protobuf"
 
-import { WidgetInfo, WidgetStateManager } from "~lib/WidgetStateManager"
 import {
   BidiComponentContext,
   BidiComponentContextShape,
@@ -27,6 +26,7 @@ import { reconstructMixedData } from "~lib/components/widgets/BidiComponent/util
 import { extractComponentsV2Theme } from "~lib/components/widgets/BidiComponent/utils/theme"
 import { useEmotionTheme } from "~lib/hooks/useEmotionTheme"
 import { assertNever } from "~lib/util/assertNever"
+import { WidgetInfo, WidgetStateManager } from "~lib/WidgetStateManager"
 
 export type BidiComponentContextProviderProps = {
   element: BidiComponentProto

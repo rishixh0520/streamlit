@@ -18,11 +18,11 @@ import { FC, memo } from "react"
 
 import type { BidiComponent as BidiComponentProto } from "@streamlit/protobuf"
 
-import type { WidgetStateManager } from "~lib/WidgetStateManager"
 import { BidiComponentContextProvider } from "~lib/components/widgets/BidiComponent/BidiComponentContextProvider"
 import { IsolatedComponent } from "~lib/components/widgets/BidiComponent/IsolatedComponent"
 import { NonIsolatedComponent } from "~lib/components/widgets/BidiComponent/NonIsolatedComponent"
 import { ThemeCssProvider } from "~lib/components/widgets/BidiComponent/ThemeCssProvider"
+import type { WidgetStateManager } from "~lib/WidgetStateManager"
 
 type BidiComponentProps = {
   element: BidiComponentProto
