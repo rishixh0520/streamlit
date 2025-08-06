@@ -3832,7 +3832,7 @@ __metadata:
   dependencies:
     eslint: "npm:^9.32.0"
     prettier: "npm:^3.6.2"
-    typescript: "npm:^5.8.3"
+    typescript: "npm:^5.9.2"
     typesync: "npm:^0.14.3"
     vite: "npm:^7.0.6"
     vite-plugin-dts: "npm:^4.5.4"
