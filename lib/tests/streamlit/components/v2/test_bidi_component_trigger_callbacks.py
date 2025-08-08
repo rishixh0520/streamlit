@@ -149,10 +149,9 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
 
         # Value assertions via aggregator
         agg_id = make_trigger_id(self.component_id, "events")
-        assert self.script_run_ctx.session_state[agg_id] == {
-            "event": "range",
-            "value": 10,
-        }
+        assert self.script_run_ctx.session_state[agg_id] == [
+            {"event": "range", "value": 10}
+        ]
 
     def test_only_text_trigger_invokes_only_text_callback(self):
         """Updating only the ``text`` trigger should only call its callback."""
@@ -374,11 +373,11 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         # Process the widget states
         self.script_run_ctx.session_state.on_script_will_rerun(widget_states)
 
-        # Verify the trigger value is accessible and equals the original object
+        # Verify the trigger value is accessible and equals the original object (wrapped in list)
         text_trigger_id = make_trigger_id(self.component_id, "events")
         trigger_value = self.script_run_ctx.session_state[text_trigger_id]
 
-        assert trigger_value == {"event": "text", "value": "plain string value"}
+        assert trigger_value == [{"event": "text", "value": "plain string value"}]
 
         # Verify the callback was called
         self.text_trigger_cb.assert_called_once()
@@ -428,8 +427,8 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         range_id = make_trigger_id(self.component_id, "events")
         trigger_value = self.script_run_ctx.session_state[range_id]
 
-        # The trigger value should be an object with empty string value
-        assert trigger_value == {"event": "range", "value": ""}
+        # The trigger value should be a list with one object with empty string value
+        assert trigger_value == [{"event": "range", "value": ""}]
 
         # The callback should have been called since we have a non-None value
         self.range_trigger_cb.assert_called_once()
@@ -450,7 +449,7 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         trigger_value = self.script_run_ctx.session_state[range_id]
 
         # The trigger value should preserve the whitespace within the object
-        assert trigger_value == {"event": "range", "value": "   "}
+        assert trigger_value == [{"event": "range", "value": "   "}]
 
         # The callback should have been called since we have a non-None value
         self.range_trigger_cb.assert_called_once()

@@ -368,10 +368,12 @@ export class WidgetStateManager {
    * 2. Payload (JSON-encoded) trigger
    *    setTriggerValue(widgetInfo, { fromUi: true }, fragmentId, payload)
    *
-   *    `payload` can be any JSON-serialisable value. It will be stringified and
-   *    stored in the protobuf `json_trigger_value` field on the backend. If
-   *    `payload` is omitted (or `undefined`) the method falls back to the
-   *    boolean `trigger_value=true` behaviour.
+   *    `payload` can be any JSON-serialisable value. For Bidi Component v2
+   *    we always transport payloads via the protobuf `json_trigger_value`
+   *    field as a JSON-stringified array of payload objects. Multiple calls
+   *    within the same macrotask are batched into that array. If `payload`
+   *    is omitted (or `undefined`) we fall back to the boolean
+   *    `trigger_value=true` behaviour.
    */
 
   public setTriggerValue<T>(
@@ -392,35 +394,30 @@ export class WidgetStateManager {
       // Simple boolean trigger.
       widgetState.triggerValue = true
     } else {
-      // Bidi Component v2: arbitrary payload transported via json_trigger_value.
-      const newPayload =
-        typeof value === "string" ? value : JSON.stringify(value)
+      // Custom Components v2: always encode payloads as a JSON array.
+      // We keep the payload as an object and stringify only once when assigning.
+      const nextPayloadObject = value as unknown
 
-      if (widgetState.jsonTriggerValue === undefined) {
-        widgetState.jsonTriggerValue = newPayload
-      } else {
-        // We already have a payload. Merge into an array of payloads.
-        try {
-          const prev = widgetState.jsonTriggerValue as string
-          const parsed = JSON.parse(prev)
-          const nextObj =
-            typeof newPayload === "string"
-              ? JSON.parse(newPayload)
-              : newPayload
-
-          if (Array.isArray(parsed)) {
-            parsed.push(nextObj)
-            widgetState.jsonTriggerValue = JSON.stringify(parsed)
-          } else {
-            widgetState.jsonTriggerValue = JSON.stringify([parsed, nextObj])
-          }
-        } catch {
-          // If previous is not JSON (shouldn't happen), fallback to array of strings
-          widgetState.jsonTriggerValue = JSON.stringify([
-            widgetState.jsonTriggerValue,
-            newPayload,
-          ])
+      try {
+        if (widgetState.jsonTriggerValue === undefined) {
+          // First payload -> start an array.
+          widgetState.jsonTriggerValue = JSON.stringify([nextPayloadObject])
+        } else {
+          // Subsequent payloads -> append to existing array
+          const prevRaw = widgetState.jsonTriggerValue as string
+          const prevParsed = JSON.parse(prevRaw)
+          const prevArray = Array.isArray(prevParsed)
+            ? (prevParsed as unknown[])
+            : [prevParsed]
+          prevArray.push(nextPayloadObject)
+          widgetState.jsonTriggerValue = JSON.stringify(prevArray)
         }
+      } catch {
+        // In the unlikely event prior state was not valid JSON, fall back to a 2-item array.
+        widgetState.jsonTriggerValue = JSON.stringify([
+          widgetState.jsonTriggerValue,
+          nextPayloadObject,
+        ])
       }
     }
 

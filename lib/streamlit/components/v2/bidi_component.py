@@ -213,6 +213,21 @@ def handle_deserialize(s: str | None) -> Any:
         return f"{s}"
 
 
+def _deserialize_trigger_list(s: str | None) -> list[Any] | None:
+    """Deserialize trigger aggregator payloads as a list.
+
+    For Custom Components v2, the frontend always sends a JSON array of payload
+    objects. This deserializer normalizes older/singular payloads into a list
+    while preserving ``None`` for cleared values.
+    """
+    value = handle_deserialize(s)
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
 # ----------------------------------------------------------------------
 # Public state typing
 # ----------------------------------------------------------------------
@@ -549,21 +564,15 @@ class BidiComponentMixin:
 
         trig_state = register_widget(
             aggregator_id,
-            deserializer=handle_deserialize,  # returns dict or primitive
+            deserializer=_deserialize_trigger_list,  # always returns list or None
             serializer=lambda v: json.dumps(v),  # send dict as JSON
             ctx=ctx,
             callbacks=callbacks_by_event if callbacks_by_event else None,
             value_type="json_trigger_value",
         )
 
-        # Surface per-event trigger values derived from the aggregator payload.
-        # Supports both a single payload object and a list of payload objects.
-        raw_payload = trig_state.value
-        payloads: list[object]
-        if isinstance(raw_payload, list):
-            payloads = raw_payload
-        else:
-            payloads = [raw_payload]
+        # Surface per-event trigger values derived from the aggregator payload list.
+        payloads: list[object] = trig_state.value or []
 
         event_to_value: dict[str, Any] = {}
         for payload in payloads:
