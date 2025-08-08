@@ -551,10 +551,7 @@ class SessionState:
         self._call_callbacks()
 
     def _call_callbacks(self) -> None:
-        """Call any callback associated with each widget whose value
-        changed between the previous and current script runs, or whose
-        trigger_value is set.
-        """
+        """Call callbacks for widgets whose value changed or whose trigger fired."""
         from streamlit.runtime.scriptrunner import RerunException
         from streamlit.runtime.state.common import WidgetCallback
 
@@ -569,58 +566,93 @@ class SessionState:
             args = metadata.callback_args or ()
             kwargs = metadata.callback_kwargs or {}
 
-            # Helper to execute a callback with fragment context handling
             def execute_callback(
                 callback_fn: WidgetCallback,
-                metadata: WidgetMetadata[Any],
-                metadata_args: WidgetArgs,
-                metadata_kwargs: dict[str, Any],
+                cb_metadata: WidgetMetadata[Any],
+                cb_args: WidgetArgs,
+                cb_kwargs: dict[str, Any],
             ) -> None:
                 ctx = get_script_run_ctx()
-                if ctx and metadata.fragment_id is not None:
-                    ctx.in_fragment_callback = True
-                    callback_fn(*metadata_args, **metadata_kwargs)
-                    ctx.in_fragment_callback = False
-                else:
-                    callback_fn(*metadata_args, **metadata_kwargs)
+                try:
+                    if ctx and cb_metadata.fragment_id is not None:
+                        ctx.in_fragment_callback = True
+                        callback_fn(*cb_args, **cb_kwargs)
+                        ctx.in_fragment_callback = False
+                    else:
+                        callback_fn(*cb_args, **cb_kwargs)
+                except RerunException:
+                    st.warning("Calling st.rerun() within a callback is a no-op.")
 
-            # 1. Check for trigger-based callbacks (e.g., "click")
-            #    This requires getting the serialized protobuf state.
+            # 1) Trigger dispatch: legacy bool + json trigger aggregator
             widget_proto_state = self._new_widget_state.get_serialized(wid)
-            if widget_proto_state and widget_proto_state.trigger_value:
-                click_callback = metadata.callbacks.get("click")
-                if click_callback is not None:
+            if widget_proto_state:
+                # Legacy boolean trigger (e.g., buttons)
+                if widget_proto_state.trigger_value:
+                    cb = metadata.callbacks.get("click")
+                    if cb is not None:
+                        execute_callback(cb, metadata, args, kwargs)
+
+                # JSON trigger aggregator: value is deserialized by metadata.deserializer
+                if widget_proto_state.json_trigger_value:
                     try:
-                        execute_callback(click_callback, metadata, args, kwargs)
-                    except RerunException:
-                        st.warning("Calling st.rerun() within a callback is a no-op.")
+                        deserialized = self._new_widget_state[wid]
+                    except KeyError:
+                        deserialized = None
+                    event_name: str | None = None
+                    if isinstance(deserialized, dict):
+                        event_name = deserialized.get("event")
+                    if event_name:
+                        cb = metadata.callbacks.get(event_name)
+                        if cb is not None:
+                            execute_callback(cb, metadata, args, kwargs)
 
-            # 2. Check for value-changed based callbacks (e.g., "change")
-            #    _widget_changed compares the primary deserialized value against _old_state.
-            if self._widget_changed(wid):
-                change_callback = metadata.callbacks.get("change")
-                if change_callback is not None:
+            # 2) Stateful JSON change dispatch (per-key callbacks) with legacy 'change' support
+            if metadata.value_type == "json_value" and metadata.callbacks:
+                callback_names = set(metadata.callbacks.keys())
+                has_per_key_callbacks = any(name != "change" for name in callback_names)
+
+                if has_per_key_callbacks:
                     try:
-                        # Ensure we don't call the same callback instance twice if it was already
-                        # triggered by trigger_value (e.g. if "click" and "change" are the same function).
-                        # This check is subtle: if trigger_value was true AND _widget_changed is true,
-                        # and both 'click' and 'change' map to the same callback object,
-                        # it would have already been called by the block above.
-                        # If they map to *different* functions, both will be called if their
-                        # respective conditions (trigger_value set, primary value changed) are met.
+                        new_val = self._new_widget_state.get(wid)
+                    except KeyError:
+                        new_val = None
+                    old_val = self._old_state.get(wid)
 
-                        # A simple way to avoid double execution for the *same callback instance*:
-                        # If 'click' callback exists, was triggered, and is the same as 'change' callback.
-                        was_click_triggered_for_same_fn = (
-                            widget_proto_state
-                            and widget_proto_state.trigger_value
-                            and metadata.callbacks.get("click") == change_callback
-                        )
+                    def unwrap(obj: object) -> dict[str, object]:
+                        if (
+                            isinstance(obj, dict)
+                            and set(obj.keys()) == {"value"}
+                            and isinstance(obj["value"], dict)
+                        ):
+                            return dict(obj["value"])  # shallow copy
+                        return dict(obj) if isinstance(obj, dict) else {}
 
-                        if not was_click_triggered_for_same_fn:
-                            execute_callback(change_callback, metadata, args, kwargs)
-                    except RerunException:
-                        st.warning("Calling st.rerun() within a callback is a no-op.")
+                    new_map = unwrap(new_val)
+                    old_map = unwrap(old_val)
+
+                    if new_map or old_map:
+                        changed_keys: set[str] = set()
+                        for k, v in new_map.items():
+                            if k not in old_map or old_map.get(k) != v:
+                                changed_keys.add(k)
+                        for k in old_map:
+                            if k not in new_map:
+                                changed_keys.add(k)
+
+                        for key in changed_keys:
+                            cb = metadata.callbacks.get(key)
+                            if cb is not None:
+                                execute_callback(cb, metadata, args, kwargs)
+                # Legacy path: a single 'change' callback handles diffing itself
+                elif self._widget_changed(wid):
+                    cb = metadata.callbacks.get("change")
+                    if cb is not None:
+                        execute_callback(cb, metadata, args, kwargs)
+            elif self._widget_changed(wid):
+                # Fallback to generic change handling for non-JSON widgets
+                cb = metadata.callbacks.get("change")
+                if cb is not None:
+                    execute_callback(cb, metadata, args, kwargs)
 
     def _widget_changed(self, widget_id: str) -> bool:
         """True if the given widget's value changed between the previous

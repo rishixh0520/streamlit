@@ -36,14 +36,14 @@ from streamlit.errors import StreamlitAPIException
     ],
 )
 def test_happy_path(base: str, event: str, expected: str):
-    assert make_trigger_id(base, event) == expected
+    assert make_trigger_id(base, event) == f"$$STREAMLIT_INTERNAL_KEY_{expected}"
 
 
 def test_idempotency():
     base, event = "foo", "bar"
     first = make_trigger_id(base, event)
     second = make_trigger_id(base, event)
-    assert first == second == "foo__bar"
+    assert first == second == "$$STREAMLIT_INTERNAL_KEY_foo__bar"
 
 
 def test_rejects_delimiter_in_base_or_event():
