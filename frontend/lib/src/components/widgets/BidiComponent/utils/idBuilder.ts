@@ -40,3 +40,26 @@ export function makeTriggerId(base: string, event: string): string {
 
   return `${STREAMLIT_INTERNAL_KEY_PREFIX}_${base}${EVENT_DELIM}${event}`
 }
+
+/**
+ * Suffix used for the trigger-aggregator widget id.
+ */
+export const TRIGGER_AGGREGATOR_SUFFIX = "events" as const
+
+/**
+ * Build the trigger-aggregator widget id given a component's base id.
+ *
+ * Aggregator widgets are marked as internal by prefixing with the internal key prefix,
+ * so they won't be exposed in st.session_state to end users.
+ *
+ * @throws {Error} If base contains the delimiter. This prevents ambiguous ids.
+ */
+export function makeTriggerAggregatorId(base: string): string {
+  if (base.includes(EVENT_DELIM)) {
+    throw new Error(
+      "Base component id must not contain the delimiter sequence"
+    )
+  }
+
+  return `${STREAMLIT_INTERNAL_KEY_PREFIX}_${base}${EVENT_DELIM}${TRIGGER_AGGREGATOR_SUFFIX}`
+}

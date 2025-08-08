@@ -28,7 +28,7 @@ import {
   handleError,
   normalizeError,
 } from "~lib/components/widgets/BidiComponent/utils/error"
-import { makeTriggerId } from "~lib/components/widgets/BidiComponent/utils/idBuilder"
+import { makeTriggerAggregatorId } from "~lib/components/widgets/BidiComponent/utils/idBuilder"
 import { LOG } from "~lib/components/widgets/BidiComponent/utils/logger"
 import { useRequiredContext } from "~lib/hooks/useRequiredContext"
 import type { WidgetStateManager } from "~lib/WidgetStateManager"
@@ -91,12 +91,12 @@ const loadAndRunModule = async <T extends ComponentState>({
     name: string,
     value: T[keyof T]
   ): void => {
-    const triggerId = makeTriggerId(componentIdForWidgetMgr, name)
+    const triggerId = makeTriggerAggregatorId(componentIdForWidgetMgr)
     void widgetMgr.setTriggerValue(
       { id: triggerId },
       { fromUi: true },
       fragmentId,
-      value
+      { event: name, value }
     )
   }
 

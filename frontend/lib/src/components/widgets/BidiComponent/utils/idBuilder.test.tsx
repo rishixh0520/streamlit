@@ -17,7 +17,11 @@
 import { describe, expect, it } from "vitest"
 
 import { STREAMLIT_INTERNAL_KEY_PREFIX } from "~lib/components/widgets/BidiComponent/constants"
-import { makeTriggerId } from "~lib/components/widgets/BidiComponent/utils/idBuilder"
+import {
+  makeTriggerAggregatorId,
+  makeTriggerId,
+  TRIGGER_AGGREGATOR_SUFFIX,
+} from "~lib/components/widgets/BidiComponent/utils/idBuilder"
 
 describe("makeTriggerId", () => {
   it("creates trigger IDs with internal prefix to hide them from session state", () => {
@@ -65,5 +69,39 @@ describe("makeTriggerId", () => {
   it("throws when base or event contains the delimiter", () => {
     expect(() => makeTriggerId("bad__base", "click")).toThrow()
     expect(() => makeTriggerId("base", "bad__event")).toThrow()
+  })
+})
+
+describe("makeTriggerAggregatorId", () => {
+  it("creates aggregator IDs with internal prefix to hide them from session state", () => {
+    expect(makeTriggerAggregatorId("myComponent")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__${TRIGGER_AGGREGATOR_SUFFIX}`
+    )
+  })
+
+  it("concatenates base and suffix with the expected format", () => {
+    const aggregatorIds = [
+      makeTriggerAggregatorId("component123"),
+      makeTriggerAggregatorId("anotherComponent"),
+    ]
+
+    aggregatorIds.forEach(aggregatorId => {
+      // Should start with internal prefix
+      expect(aggregatorId).toMatch(
+        new RegExp(`^\\$\\$STREAMLIT_INTERNAL_KEY_`)
+      )
+      // Should contain the delimiter
+      expect(aggregatorId).toMatch(/__/)
+      // Should be structured as prefix_base__events
+      expect(aggregatorId).toMatch(
+        new RegExp(
+          `^\\$\\$STREAMLIT_INTERNAL_KEY_[^_]+__${TRIGGER_AGGREGATOR_SUFFIX}$`
+        )
+      )
+    })
+  })
+
+  it("throws when base contains the delimiter", () => {
+    expect(() => makeTriggerAggregatorId("bad__base")).toThrow()
   })
 })
