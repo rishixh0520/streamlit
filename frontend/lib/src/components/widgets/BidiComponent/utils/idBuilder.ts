@@ -20,28 +20,6 @@ import {
 } from "~lib/components/widgets/BidiComponent/constants"
 
 /**
- * Build the trigger widget id given a component's base id and an event name.
- *
- * Trigger widgets are marked as internal by prefixing with the internal key prefix,
- * so they won't be exposed in st.session_state to end users.
- *
- * @throws {Error} If either argument already contains the delimiter. This
- *                 prevents ambiguous ids that would break round-trip parsing.
- */
-export function makeTriggerId(base: string, event: string): string {
-  if (base.includes(EVENT_DELIM)) {
-    throw new Error(
-      "Base component id must not contain the delimiter sequence"
-    )
-  }
-  if (event.includes(EVENT_DELIM)) {
-    throw new Error("Event name must not contain the delimiter sequence")
-  }
-
-  return `${STREAMLIT_INTERNAL_KEY_PREFIX}_${base}${EVENT_DELIM}${event}`
-}
-
-/**
  * Suffix used for the trigger-aggregator widget id.
  */
 export const TRIGGER_AGGREGATOR_SUFFIX = "events" as const
