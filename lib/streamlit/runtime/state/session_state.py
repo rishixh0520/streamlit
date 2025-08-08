@@ -583,7 +583,7 @@ class SessionState:
                 except RerunException:
                     st.warning("Calling st.rerun() within a callback is a no-op.")
 
-            # 1) Trigger dispatch: legacy bool + json trigger aggregator
+            # 1) Trigger dispatch: legacy bool + json trigger aggregator (single or batched)
             widget_proto_state = self._new_widget_state.get_serialized(wid)
             if widget_proto_state:
                 # Legacy boolean trigger (e.g., buttons)
@@ -598,13 +598,20 @@ class SessionState:
                         deserialized = self._new_widget_state[wid]
                     except KeyError:
                         deserialized = None
-                    event_name: str | None = None
-                    if isinstance(deserialized, dict):
-                        event_name = deserialized.get("event")
-                    if event_name:
-                        cb = metadata.callbacks.get(event_name)
-                        if cb is not None:
-                            execute_callback(cb, metadata, args, kwargs)
+                    # Support a single event-object or a list of event-objects
+                    payloads: list[object]
+                    if isinstance(deserialized, list):
+                        payloads = deserialized
+                    else:
+                        payloads = [deserialized]
+
+                    for payload in payloads:
+                        if isinstance(payload, dict):
+                            event_name = payload.get("event")
+                            if isinstance(event_name, str):
+                                cb = metadata.callbacks.get(event_name)
+                                if cb is not None:
+                                    execute_callback(cb, metadata, args, kwargs)
 
             # 2) Stateful JSON change dispatch (per-key callbacks) with legacy 'change' support
             if metadata.value_type == "json_value" and metadata.callbacks:

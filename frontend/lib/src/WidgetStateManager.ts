@@ -380,15 +380,48 @@ export class WidgetStateManager {
     fragmentId: string | undefined,
     value?: T
   ): Promise<void> {
-    const widgetState = this.createWidgetState(widget, source)
+    // If we already have a pending trigger for this widget in the current
+    // macrotask, append to it instead of overwriting so multiple triggers are
+    // delivered in a single backend message.
+    let widgetState = this.getWidgetState(widget)
+    if (widgetState === undefined) {
+      widgetState = this.createWidgetState(widget, source)
+    }
 
     if (value === undefined) {
       // Simple boolean trigger.
       widgetState.triggerValue = true
     } else {
       // Bidi Component v2: arbitrary payload transported via json_trigger_value.
-      widgetState.jsonTriggerValue =
+      const newPayload =
         typeof value === "string" ? value : JSON.stringify(value)
+
+      if (widgetState.jsonTriggerValue === undefined) {
+        widgetState.jsonTriggerValue = newPayload
+      } else {
+        // We already have a payload. Merge into an array of payloads.
+        try {
+          const prev = widgetState.jsonTriggerValue as string
+          const parsed = JSON.parse(prev)
+          const nextObj =
+            typeof newPayload === "string"
+              ? JSON.parse(newPayload)
+              : newPayload
+
+          if (Array.isArray(parsed)) {
+            parsed.push(nextObj)
+            widgetState.jsonTriggerValue = JSON.stringify(parsed)
+          } else {
+            widgetState.jsonTriggerValue = JSON.stringify([parsed, nextObj])
+          }
+        } catch {
+          // If previous is not JSON (shouldn't happen), fallback to array of strings
+          widgetState.jsonTriggerValue = JSON.stringify([
+            widgetState.jsonTriggerValue,
+            newPayload,
+          ])
+        }
+      }
     }
 
     // --------------------------------------------------------------

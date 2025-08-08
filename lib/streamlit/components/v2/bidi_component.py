@@ -556,18 +556,24 @@ class BidiComponentMixin:
             value_type="json_trigger_value",
         )
 
-        # Surface per-event trigger values from the aggregator's last event
-        # for backwards-compatibility with the result shape.
-        last_trigger = trig_state.value
-        if isinstance(last_trigger, dict):
-            last_event = last_trigger.get("event")
-            last_value = last_trigger.get("value")
+        # Surface per-event trigger values derived from the aggregator payload.
+        # Supports both a single payload object and a list of payload objects.
+        raw_payload = trig_state.value
+        payloads: list[object]
+        if isinstance(raw_payload, list):
+            payloads = raw_payload
         else:
-            last_event = None
-            last_value = None
+            payloads = [raw_payload]
+
+        event_to_value: dict[str, Any] = {}
+        for payload in payloads:
+            if isinstance(payload, dict):
+                ev = payload.get("event")
+                if isinstance(ev, str):
+                    event_to_value[ev] = payload.get("value")
 
         for evt_name in callbacks_by_event:
-            trigger_vals[evt_name] = last_value if last_event == evt_name else None
+            trigger_vals[evt_name] = event_to_value.get(evt_name)
 
         # Note: We intentionally do not inspect SessionState for additional
         # trigger widget IDs here because doing so can raise KeyErrors when
