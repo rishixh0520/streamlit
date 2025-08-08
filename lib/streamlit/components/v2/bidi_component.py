@@ -575,6 +575,7 @@ class BidiComponentMixin:
 
             # Keys that are new or whose value differs from the previous run.
             for k, v in current_state_dict.items():
+                # TODO: Is this check sufficient enough for all cases?
                 if k not in _prev_state or _prev_state.get(k) != v:
                     changed_keys.add(k)
 
