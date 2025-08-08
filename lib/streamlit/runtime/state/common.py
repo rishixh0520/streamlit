@@ -78,9 +78,10 @@ _ARRAY_VALUE_FIELD_NAMES: Final = frozenset(
 )
 
 # These are the possible field names that can be set in the `value` oneof-field
-# of the WidgetState message (schema found in .proto/WidgetStates.proto).
-# We need these as a literal type to ensure correspondence with the protobuf
-# schema in certain parts of the python code.
+# of the WidgetState message (schema found in
+# proto/streamlit/proto/WidgetStates.proto). We need these as a literal type to
+# ensure correspondence with the protobuf schema in certain parts of the python
+# code.
 # TODO(harahu): It would be preferable if this type was automatically derived
 #  from the protobuf schema, rather than manually maintained. Not sure how to
 #  achieve that, though.

@@ -58,12 +58,14 @@ export type ComponentArgs<
   ) => void
 }
 
+type ComponentCleanupFunction = () => void
+
 export type ComponentResult =
-  | (() => void)
+  | ComponentCleanupFunction
   | void
   // TODO: Technically, a Promise is undefined behavior, but we'll allow it
   // for now.
-  | Promise<() => void>
+  | Promise<ComponentCleanupFunction>
   | Promise<void>
 
 /**
