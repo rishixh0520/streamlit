@@ -167,6 +167,9 @@ def make_trigger_id(base: str, event: str) -> str:
     perform a couple of validations so that downstream logic can always split
     the identifier unambiguously.
 
+    Trigger widgets are marked as internal by prefixing with the internal key prefix,
+    so they won't be exposed in st.session_state to end users.
+
     Parameters
     ----------
     base : str
@@ -178,14 +181,15 @@ def make_trigger_id(base: str, event: str) -> str:
     Returns
     -------
     str
-        The composite widget id in the form ``"{base}__{event}"`` where
-        ``__`` is the delimiter.
+        The composite widget id in the form ``"$$STREAMLIT_INTERNAL_KEY_{base}__{event}"``
+        where ``__`` is the delimiter.
 
     Raises
     ------
     ValueError
         If either *base* or *event* already contains the delimiter sequence.
     """
+    from streamlit.runtime.state.session_state import STREAMLIT_INTERNAL_KEY_PREFIX
 
     if EVENT_DELIM in base:
         raise StreamlitAPIException(
@@ -196,7 +200,7 @@ def make_trigger_id(base: str, event: str) -> str:
             "Event name must not contain the delimiter sequence"
         )
 
-    return f"{base}{EVENT_DELIM}{event}"
+    return f"{STREAMLIT_INTERNAL_KEY_PREFIX}_{base}{EVENT_DELIM}{event}"
 
 
 def handle_deserialize(s: str | None) -> Any:

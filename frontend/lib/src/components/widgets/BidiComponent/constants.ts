@@ -27,3 +27,11 @@ export const EVENT_DELIM = "__" as const
  * defined in `streamlit.components.v2.bidi_component`.
  */
 export const ARROW_REF_KEY = "__streamlit_arrow_ref__" as const
+
+/**
+ * Shared constant that is used to prefix internal Streamlit keys.
+ * This value **must** stay in sync with its Python counterpart defined in
+ * `streamlit.runtime.state.session_state`.
+ */
+export const STREAMLIT_INTERNAL_KEY_PREFIX =
+  "$$STREAMLIT_INTERNAL_KEY" as const

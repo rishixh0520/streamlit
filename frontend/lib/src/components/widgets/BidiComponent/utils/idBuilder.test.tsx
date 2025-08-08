@@ -16,17 +16,50 @@
 
 import { describe, expect, it } from "vitest"
 
+import { STREAMLIT_INTERNAL_KEY_PREFIX } from "~lib/components/widgets/BidiComponent/constants"
 import { makeTriggerId } from "~lib/components/widgets/BidiComponent/utils/idBuilder"
 
 describe("makeTriggerId", () => {
-  it("concatenates base and event with the expected delimiter", () => {
-    expect(makeTriggerId("myComponent", "click")).toBe("myComponent__click")
-    expect(makeTriggerId("myComponent", "change")).toBe("myComponent__change")
-    expect(makeTriggerId("myComponent", "input")).toBe("myComponent__input")
-    expect(makeTriggerId("myComponent", "submit")).toBe("myComponent__submit")
-    expect(makeTriggerId("myComponent", "reset")).toBe("myComponent__reset")
-    expect(makeTriggerId("myComponent", "blur")).toBe("myComponent__blur")
-    expect(makeTriggerId("myComponent", "focus")).toBe("myComponent__focus")
+  it("creates trigger IDs with internal prefix to hide them from session state", () => {
+    expect(makeTriggerId("myComponent", "click")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__click`
+    )
+    expect(makeTriggerId("myComponent", "change")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__change`
+    )
+    expect(makeTriggerId("myComponent", "input")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__input`
+    )
+    expect(makeTriggerId("myComponent", "submit")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__submit`
+    )
+    expect(makeTriggerId("myComponent", "reset")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__reset`
+    )
+    expect(makeTriggerId("myComponent", "blur")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__blur`
+    )
+    expect(makeTriggerId("myComponent", "focus")).toBe(
+      `${STREAMLIT_INTERNAL_KEY_PREFIX}_myComponent__focus`
+    )
+  })
+
+  it("concatenates base and event with the expected format", () => {
+    const triggerIds = [
+      makeTriggerId("component123", "click"),
+      makeTriggerId("anotherComponent", "hover"),
+    ]
+
+    triggerIds.forEach(triggerId => {
+      // Should start with internal prefix
+      expect(triggerId).toMatch(new RegExp(`^\\$\\$STREAMLIT_INTERNAL_KEY_`))
+      // Should contain the delimiter
+      expect(triggerId).toMatch(/__/)
+      // Should be structured as prefix_base__event
+      expect(triggerId).toMatch(
+        new RegExp(`^\\$\\$STREAMLIT_INTERNAL_KEY_[^_]+__[^_]+$`)
+      )
+    })
   })
 
   it("throws when base or event contains the delimiter", () => {

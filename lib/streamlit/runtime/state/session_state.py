@@ -376,7 +376,7 @@ class SessionState:
 
     @property
     def filtered_state(self) -> dict[str, Any]:
-        """The combined session and widget state, excluding keyless widgets."""
+        """The combined session and widget state, excluding keyless widgets and internal widgets."""
 
         wid_key_map = self._key_id_mapper.id_key_mapping
 
@@ -389,7 +389,7 @@ class SessionState:
         for k in self._keys():
             if not is_element_id(k) and not _is_internal_key(k):
                 state[k] = self[k]
-            elif is_keyed_element_id(k):
+            elif is_keyed_element_id(k) and not _is_internal_key(k):
                 try:
                     key = wid_key_map[k]
                     state[key] = self[k]
