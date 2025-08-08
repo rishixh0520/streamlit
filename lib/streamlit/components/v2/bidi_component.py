@@ -526,120 +526,48 @@ class BidiComponentMixin:
         # 2. Register the *persistent state* widget (one per component)
         # ------------------------------------------------------------------
 
-        # When the frontend calls `setStateValue`, it updates the component's
-        # *persistent* JSON state (one per component instance). In order to
-        # surface these updates to the user we attach a single "change"
-        # callback to this state widget that performs a fine-grained diff and
-        # only invokes the callbacks whose associated key actually changed.
-
-        # Keep track of the previous state across callback invocations so that
-        # we can detect which keys were modified. We initialise it to an empty
-        # dict here and populate it with the component's current state once
-        # the widget is registered (see further below).
-        _prev_state: dict[str, Any] = {}
-
-        def _on_component_state_change() -> None:
-            """Dispatch state-change notifications to the *relevant* handlers.
-
-            We compare the latest component state with the previously cached
-            version and identify which top-level keys (i.e. state entries)
-            actually changed. Only the callbacks that correspond to those
-            keys are executed. This prevents unrelated callbacks from firing
-            when their piece of state remained untouched.
-            """
-
-            nonlocal _prev_state
-
-            # Fetch the *latest* component state from Session State instead of
-            # relying on the stale ``component_state`` captured from the script
-            # run in which this callback was registered. Using Session State
-            # guarantees we always operate on the up-to-date value produced by
-            # the most recent frontend → backend update.
-
-            current_ctx = get_script_run_ctx()
-
-            # If, for some unexpected reason, we don't have a script context
-            # we bail early - there's nothing useful we can do.
-            if current_ctx is None:
-                return
-
-            try:
-                raw_val = current_ctx.session_state[computed_id]
-            except KeyError:
-                # The component might have been removed in the meantime. Skip.
-                return
-
-            # Extract the *inner* mapping of the state.
-            current_state_dict = _unwrap_component_state(raw_val)
-
-            # Determine which keys were added, removed or had their value
-            # changed. We treat None vs missing as a change so that setting a
-            # key to None still triggers its callback.
-            changed_keys: set[str] = set()
-
-            # Keys that are new or whose value differs from the previous run.
-            for k, v in current_state_dict.items():
-                # TODO: Is this check sufficient enough for all cases?
-                if k not in _prev_state or _prev_state.get(k) != v:
-                    changed_keys.add(k)
-
-            # Keys that were removed.
-            for k in _prev_state:
-                if k not in current_state_dict:
-                    changed_keys.add(k)
-
-            # Execute the callbacks associated with the changed keys.
-            for changed_key in changed_keys:
-                cb = callbacks_by_event.get(changed_key)
-                if cb is None:
-                    continue
-                cb()
-
-            # Update the cached copy for the next comparison.
-            _prev_state = dict(current_state_dict)
-
+        # With generalized runtime dispatch, we can attach per-key callbacks
+        # directly to the state widget by passing the callbacks mapping.
         component_state = register_widget(
             bidi_component_proto.id,
             deserializer=serde.deserialize,
             serializer=serde.serialize,
             ctx=ctx,
-            callbacks={"change": _on_component_state_change}
-            if callbacks_by_event
-            else None,
+            callbacks=callbacks_by_event if callbacks_by_event else None,
             value_type="json_value",
         )
 
-        # Prime `_prev_state` with the *current* component state so that the
-        # very first diff performed inside `_on_component_state_change` (i.e.
-        # after the user interacts with the component for the first time)
-        # correctly reflects only the keys that actually changed.
-        # `component_state.value` may include the additional ``{"value": ...}``
-        # wrapper injected by our Serde. To ensure we treat individual *state
-        # keys* consistently we unwrap one level if that structure is
-        # detected.
-
-        _initial_raw_val = component_state.value  # AttributeDictionary or primitive
-
-        _prev_state = _unwrap_component_state(_initial_raw_val)
-
         # ------------------------------------------------------------------
-        # 3. Register *trigger* widgets - one per event
+        # 3. Register a single *trigger aggregator* widget
         # ------------------------------------------------------------------
         trigger_vals: dict[str, Any] = {}
 
-        for evt_name, evt_cb in callbacks_by_event.items():
-            trig_id = make_trigger_id(computed_id, evt_name)
+        def _make_trigger_aggregator_id(base: str) -> str:
+            return make_trigger_id(base, "events")
 
-            trig_state = register_widget(
-                trig_id,
-                deserializer=handle_deserialize,
-                serializer=lambda v: json.dumps(v),
-                ctx=ctx,
-                callbacks={"change": evt_cb} if evt_cb is not None else None,
-                value_type="json_trigger_value",
-            )
+        aggregator_id = _make_trigger_aggregator_id(computed_id)
 
-            trigger_vals[evt_name] = trig_state.value
+        trig_state = register_widget(
+            aggregator_id,
+            deserializer=handle_deserialize,  # returns dict or primitive
+            serializer=lambda v: json.dumps(v),  # send dict as JSON
+            ctx=ctx,
+            callbacks=callbacks_by_event if callbacks_by_event else None,
+            value_type="json_trigger_value",
+        )
+
+        # Surface per-event trigger values from the aggregator's last event
+        # for backwards-compatibility with the result shape.
+        last_trigger = trig_state.value
+        if isinstance(last_trigger, dict):
+            last_event = last_trigger.get("event")
+            last_value = last_trigger.get("value")
+        else:
+            last_event = None
+            last_value = None
+
+        for evt_name in callbacks_by_event:
+            trigger_vals[evt_name] = last_value if last_event == evt_name else None
 
         # Note: We intentionally do not inspect SessionState for additional
         # trigger widget IDs here because doing so can raise KeyErrors when
