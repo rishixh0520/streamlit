@@ -112,11 +112,17 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
             protobuf.
         """
 
-        widget_states = WidgetStates()
-        for event_name, payload in trigger_updates.items():
-            ws = WidgetState(id=make_trigger_id(self.component_id, event_name))
-            ws.json_trigger_value = json.dumps(payload)
-            widget_states.widgets.append(ws)
+        # Aggregator path: combine updates into a single payload
+        updates = [
+            {"event": name, "value": payload}
+            for name, payload in trigger_updates.items()
+        ]
+        payload = updates[0] if len(updates) == 1 else updates
+
+        agg_id = make_trigger_id(self.component_id, "events")
+        ws = WidgetState(id=agg_id)
+        ws.json_trigger_value = json.dumps(payload)
+        widget_states = WidgetStates(widgets=[ws])
 
         # Feed the simulated WidgetStates into Session State which will, in
         # turn, invoke the appropriate callbacks via ``_call_callbacks``.
@@ -141,9 +147,12 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         self.range_trigger_cb.assert_called_once()
         self.text_trigger_cb.assert_not_called()
 
-        # Value assertions
-        range_id = make_trigger_id(self.component_id, "range")
-        assert self.script_run_ctx.session_state[range_id] == 10
+        # Value assertions via aggregator
+        agg_id = make_trigger_id(self.component_id, "events")
+        assert self.script_run_ctx.session_state[agg_id] == {
+            "event": "range",
+            "value": 10,
+        }
 
     def test_only_text_trigger_invokes_only_text_callback(self):
         """Updating only the ``text`` trigger should only call its callback."""
@@ -176,8 +185,8 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
 
         # After a button click, the *previous* range trigger should have been
         # reset to ``None`` by SessionState._reset_triggers.
-        range_id = make_trigger_id(self.component_id, "range")
-        assert self.script_run_ctx.session_state[range_id] is None
+        agg_id = make_trigger_id(self.component_id, "events")
+        assert self.script_run_ctx.session_state[agg_id] is None
 
         self._simulate_trigger_update({"range": 10})
 
@@ -191,9 +200,10 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         # Compose a single WidgetStates message that includes both updates.
         widget_states = WidgetStates()
 
-        # Component trigger for 'range'
-        ws_component = WidgetState(id=make_trigger_id(self.component_id, "range"))
-        ws_component.json_trigger_value = json.dumps(123)
+        # Component trigger via aggregator for 'range'
+        agg_id = make_trigger_id(self.component_id, "events")
+        ws_component = WidgetState(id=agg_id)
+        ws_component.json_trigger_value = json.dumps({"event": "range", "value": 123})
         widget_states.widgets.append(ws_component)
 
         # Button click
@@ -355,18 +365,20 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         widget_states = WidgetStates()
 
         # Test with a plain string value (not valid JSON)
-        ws_component = WidgetState(id=make_trigger_id(self.component_id, "text"))
-        ws_component.json_trigger_value = "plain string value"  # Not valid JSON
+        ws_component = WidgetState(id=make_trigger_id(self.component_id, "events"))
+        ws_component.json_trigger_value = json.dumps(
+            {"event": "text", "value": "plain string value"}
+        )
         widget_states.widgets.append(ws_component)
 
         # Process the widget states
         self.script_run_ctx.session_state.on_script_will_rerun(widget_states)
 
-        # Verify the trigger value is accessible and equals the original string
-        text_trigger_id = make_trigger_id(self.component_id, "text")
+        # Verify the trigger value is accessible and equals the original object
+        text_trigger_id = make_trigger_id(self.component_id, "events")
         trigger_value = self.script_run_ctx.session_state[text_trigger_id]
 
-        assert trigger_value == "plain string value"
+        assert trigger_value == {"event": "text", "value": "plain string value"}
 
         # Verify the callback was called
         self.text_trigger_cb.assert_called_once()
@@ -375,28 +387,27 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         """Integration test: verify both JSON and string values work together."""
         widget_states = WidgetStates()
 
-        # One trigger with valid JSON
-        ws_range = WidgetState(id=make_trigger_id(self.component_id, "range"))
-        ws_range.json_trigger_value = "42"  # Valid JSON number
-        widget_states.widgets.append(ws_range)
-
-        # Another trigger with plain string
-        ws_text = WidgetState(id=make_trigger_id(self.component_id, "text"))
-        ws_text.json_trigger_value = "user input text"  # Plain string
-        widget_states.widgets.append(ws_text)
+        # Combine both triggers into a single aggregator payload list
+        agg_id = make_trigger_id(self.component_id, "events")
+        ws_both = WidgetState(id=agg_id)
+        ws_both.json_trigger_value = json.dumps(
+            [
+                {"event": "range", "value": 42},
+                {"event": "text", "value": "user input text"},
+            ]
+        )
+        widget_states.widgets.append(ws_both)
 
         # Process the widget states
         self.script_run_ctx.session_state.on_script_will_rerun(widget_states)
 
         # Verify both values are correctly deserialized
-        range_trigger_id = make_trigger_id(self.component_id, "range")
-        text_trigger_id = make_trigger_id(self.component_id, "text")
-
-        range_value = self.script_run_ctx.session_state[range_trigger_id]
-        text_value = self.script_run_ctx.session_state[text_trigger_id]
-
-        assert range_value == 42  # Parsed as JSON number
-        assert text_value == "user input text"  # Returned as string
+        agg_id = make_trigger_id(self.component_id, "events")
+        agg_value = self.script_run_ctx.session_state[agg_id]
+        assert isinstance(agg_value, list)
+        by_event = {item["event"]: item["value"] for item in agg_value}
+        assert by_event["range"] == 42
+        assert by_event["text"] == "user input text"
 
         # Verify both callbacks were called
         self.range_trigger_cb.assert_called_once()
@@ -406,19 +417,19 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         """Test that an empty string json_trigger_value doesn't cause issues."""
         # Simulate a trigger update with an empty string
         widget_states = WidgetStates()
-        ws_component = WidgetState(id=make_trigger_id(self.component_id, "range"))
-        ws_component.json_trigger_value = ""  # Empty string
+        ws_component = WidgetState(id=make_trigger_id(self.component_id, "events"))
+        ws_component.json_trigger_value = json.dumps({"event": "range", "value": ""})
         widget_states.widgets.append(ws_component)
 
         # Process the widget states
         self.script_run_ctx.session_state.on_script_will_rerun(widget_states)
 
         # Access the trigger value - this should work without throwing an exception
-        range_id = make_trigger_id(self.component_id, "range")
+        range_id = make_trigger_id(self.component_id, "events")
         trigger_value = self.script_run_ctx.session_state[range_id]
 
-        # The trigger value should be an empty string (not None, as it was in the old behavior)
-        assert trigger_value == ""
+        # The trigger value should be an object with empty string value
+        assert trigger_value == {"event": "range", "value": ""}
 
         # The callback should have been called since we have a non-None value
         self.range_trigger_cb.assert_called_once()
@@ -427,19 +438,19 @@ class BidiComponentTriggerCallbackTest(DeltaGeneratorTestCase):
         """Test that whitespace-only json_trigger_value preserves the whitespace."""
         # Simulate a trigger update with whitespace
         widget_states = WidgetStates()
-        ws_component = WidgetState(id=make_trigger_id(self.component_id, "range"))
-        ws_component.json_trigger_value = "   "  # Whitespace string
+        ws_component = WidgetState(id=make_trigger_id(self.component_id, "events"))
+        ws_component.json_trigger_value = json.dumps({"event": "range", "value": "   "})
         widget_states.widgets.append(ws_component)
 
         # Process the widget states
         self.script_run_ctx.session_state.on_script_will_rerun(widget_states)
 
         # Access the trigger value
-        range_id = make_trigger_id(self.component_id, "range")
+        range_id = make_trigger_id(self.component_id, "events")
         trigger_value = self.script_run_ctx.session_state[range_id]
 
-        # The trigger value should preserve the whitespace
-        assert trigger_value == "   "
+        # The trigger value should preserve the whitespace within the object
+        assert trigger_value == {"event": "range", "value": "   "}
 
         # The callback should have been called since we have a non-None value
         self.range_trigger_cb.assert_called_once()

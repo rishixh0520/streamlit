@@ -97,40 +97,28 @@ class BidiComponentMixinTest(DeltaGeneratorTestCase):
         ctx = get_script_run_ctx()
         assert ctx is not None, "ScriptRunContext missing in test"
 
-        # Compute expected trigger ids
-        # `ctx.widget_ids_this_run` is the publicly exposed collection of widget
-        # IDs that were instantiated during the current script run. It is safe
-        # to iterate over this set without triggering additional Session State
-        # look-ups that could raise ``KeyError``.
-
+        # Compute expected aggregator trigger id
         base_id = next(
             wid
             for wid in ctx.widget_ids_this_run
             if wid.startswith("$$ID") and EVENT_DELIM not in wid
         )
-        expected_click_id = make_trigger_id(base_id, "click")
-        expected_hover_id = make_trigger_id(base_id, "hover")
+        aggregator_id = make_trigger_id(base_id, "events")
 
-        # Access the *internal* SessionState object to retrieve widget
-        # metadata, which is required to validate the registration. The public
-        # SafeSessionState wrapper does not expose this information directly,
-        # so accessing the protected member is acceptable in our unit tests.
-
+        # Access internal SessionState to retrieve widget metadata.
         internal_state = ctx.session_state._state  # SessionState instance
 
-        metadata_click = internal_state._new_widget_state.widget_metadata[
-            expected_click_id
-        ]
-        metadata_hover = internal_state._new_widget_state.widget_metadata[
-            expected_hover_id
+        metadata_aggregator = internal_state._new_widget_state.widget_metadata[
+            aggregator_id
         ]
 
-        assert metadata_click.value_type == "json_trigger_value"
-        assert metadata_hover.value_type == "json_trigger_value"
+        assert metadata_aggregator.value_type == "json_trigger_value"
 
-        # The callbacks must be wired to the "change" event in metadata
-        assert metadata_click.callbacks == {"change": on_click_cb}
-        assert metadata_hover.callbacks == {"change": on_hover_cb}
+        # The callbacks must be wired by event name in metadata
+        assert metadata_aggregator.callbacks == {
+            "click": on_click_cb,
+            "hover": on_hover_cb,
+        }
 
 
 if __name__ == "__main__":
