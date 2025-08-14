@@ -3830,11 +3830,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@streamlit/component-v2-lib@workspace:component-v2-lib"
   dependencies:
-    eslint: "npm:^9.32.0"
+    eslint: "npm:^9.33.0"
     prettier: "npm:^3.6.2"
     typescript: "npm:^5.9.2"
     typesync: "npm:^0.14.3"
-    vite: "npm:^7.0.6"
+    vite: "npm:^7.1.0"
     vite-plugin-dts: "npm:^4.5.4"
     vite-tsconfig-paths: "npm:^5.1.4"
     vitest: "npm:^3.2.4"
