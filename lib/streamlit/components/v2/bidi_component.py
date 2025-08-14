@@ -464,7 +464,7 @@ class BidiComponentMixin:
                 # Preferred pattern: on_<event>_change
                 event_name = kwarg_key[3:-7]  # strip prefix + suffix
             else:
-                # Not an event callback we recognise - skip.
+                # Not an event callback we recognize - skip.
                 continue
 
             if not event_name:

@@ -60,6 +60,7 @@ class BidiComponentManager:
         # Create dependencies
         self._registry = registry or BidiComponentRegistry()
         self._manifest_handler = manifest_handler or ComponentManifestHandler()
+        # TODO: Do not instantiate file watcher in production
         self._file_watcher = file_watcher or ComponentFileWatcher(
             self._registry.update_component
         )
