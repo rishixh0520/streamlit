@@ -127,5 +127,6 @@ result = my_component(
 )
 
 st.write(f"Result: {result}")
+st.text(f"session_state: {st.session_state.get('my_component_1')}")
 
 st.write(f"Click count: {st.session_state.click_count}")

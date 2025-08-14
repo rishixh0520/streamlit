@@ -26,6 +26,7 @@ from streamlit.runtime.state.common import (
     WidgetKwargs,
     WidgetMetadata,
     WidgetSerializer,
+    WidgetValuePresenter,
     user_key_from_element_id,
 )
 
@@ -44,6 +45,7 @@ def register_widget(
     args: WidgetArgs | None = None,
     kwargs: WidgetKwargs | None = None,
     value_type: ValueFieldName,
+    presenter: WidgetValuePresenter | None = None,
 ) -> RegisterWidgetResult[T]:
     """Register a widget with Streamlit, and return its current value.
     NOTE: This function should be called after the proto has been filled.
@@ -120,6 +122,7 @@ def register_widget(
         callback_args=args,
         callback_kwargs=kwargs,
         fragment_id=ctx.current_fragment_id if ctx else None,
+        presenter=presenter,
     )
     return register_widget_from_metadata(metadata, ctx)
 

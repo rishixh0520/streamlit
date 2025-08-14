@@ -106,6 +106,13 @@ def is_array_value_field_name(obj: object) -> TypeGuard[ArrayValueFieldName]:
     return obj in _ARRAY_VALUE_FIELD_NAMES
 
 
+# Optional hook that allows a widget to customize how its value should be presented
+# in `st.session_state` without altering the underlying stored value or callback
+# semantics. The presenter receives the widget's base value and the SessionState
+# instance in case it needs to access additional widget state.
+WidgetValuePresenter: TypeAlias = Callable[[Any, "SessionState"], Any]
+
+
 @dataclass(frozen=True)
 class WidgetMetadata(Generic[T]):
     """Metadata associated with a single widget. Immutable."""
@@ -124,6 +131,12 @@ class WidgetMetadata(Generic[T]):
     callback_kwargs: WidgetKwargs | None = None
 
     fragment_id: str | None = None
+
+    # Optional presenter hook used for customizing the user-visible value in
+    # st.session_state. This is intended for advanced widgets (e.g. Custom
+    # Components v2) that need to synthesize a presentation-only value from
+    # multiple internal widget states.
+    presenter: WidgetValuePresenter | None = None
 
     def __repr__(self) -> str:
         return util.repr_(self)

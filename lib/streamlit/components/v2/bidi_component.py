@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, TypedDict, cast
 
+from streamlit.components.v2.presentation import make_bidi_component_presenter
 from streamlit.dataframe_util import (
     DataFormat,
     convert_anything_to_arrow_bytes,
@@ -538,11 +539,19 @@ class BidiComponentMixin:
         serde = BidiComponentSerde(default=default)
 
         # ------------------------------------------------------------------
-        # 2. Register the *persistent state* widget (one per component)
+        # 2. Prepare IDs and register widgets
         # ------------------------------------------------------------------
+
+        # Compute trigger aggregator id from the base id
+        def _make_trigger_aggregator_id(base: str) -> str:
+            return make_trigger_id(base, "events")
+
+        aggregator_id = _make_trigger_aggregator_id(computed_id)
 
         # With generalized runtime dispatch, we can attach per-key callbacks
         # directly to the state widget by passing the callbacks mapping.
+        # We also register a presenter to shape the user-visible session_state.
+        presenter = make_bidi_component_presenter(aggregator_id)
         component_state = register_widget(
             bidi_component_proto.id,
             deserializer=serde.deserialize,
@@ -550,17 +559,13 @@ class BidiComponentMixin:
             ctx=ctx,
             callbacks=callbacks_by_event if callbacks_by_event else None,
             value_type="json_value",
+            presenter=presenter,
         )
 
         # ------------------------------------------------------------------
         # 3. Register a single *trigger aggregator* widget
         # ------------------------------------------------------------------
         trigger_vals: dict[str, Any] = {}
-
-        def _make_trigger_aggregator_id(base: str) -> str:
-            return make_trigger_id(base, "events")
-
-        aggregator_id = _make_trigger_aggregator_id(computed_id)
 
         trig_state = register_widget(
             aggregator_id,
@@ -600,6 +605,7 @@ class BidiComponentMixin:
         )
 
         state_vals = _unwrap_component_state(component_state.value)
+
         return BidiComponentResult(self.dg, state_vals, trigger_vals)
 
     @property

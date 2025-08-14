@@ -125,6 +125,7 @@ st.write(f"Bar count: {st.session_state.bar_count}")
 st.write(
     f"Last on_bar_change callback processed at: {st.session_state.last_on_bar_change_processed}"
 )
+st.text(f"Session state: {st.session_state.get('my_component_1')}")
 
 
 is_clicked = st.button("st.button trigger")

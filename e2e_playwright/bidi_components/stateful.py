@@ -116,6 +116,7 @@ result = my_component(
 result.delta_generator.write("Hello from result.delta_generator.write")
 
 st.write(f"Result: {result}")
+st.text(f"session_state: {st.session_state.get('my_component_1')}")
 st.write(f"Range change count: {st.session_state.range_change_count}")
 st.write(f"Text change count: {st.session_state.text_change_count}")
 

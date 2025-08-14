@@ -32,6 +32,11 @@ def test_default_loads_correctly(app: Page):
             "'clicked': None}"
         )
     ).to_be_visible()
+    expect(
+        app.get_by_text(
+            "session_state: {'value': {'formValues': {'range': 20, 'text': 'Text input'}}}"
+        )
+    ).to_be_visible()
 
 
 def test_form_submission_triggers_on_change(app: Page):
@@ -51,5 +56,10 @@ def test_form_submission_triggers_on_change(app: Page):
             "Result: {'delta_generator': DeltaGenerator(), "
             "'formValues': {'range': '50', 'text': 'Modified text'}, "
             "'clicked': True}"
+        )
+    ).to_be_visible()
+    expect(
+        app.get_by_text(
+            "session_state: {'value': {'formValues': {'range': '50', 'text': 'Modified text'}, 'clicked': True}}"
         )
     ).to_be_visible()

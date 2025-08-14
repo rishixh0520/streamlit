@@ -24,7 +24,7 @@ def test_stateful_interactions(app: Page):
             "Result: {'delta_generator': DeltaGenerator(), 'range': None, 'text': None}"
         )
     ).to_be_visible()
-
+    expect(app.get_by_text("session_state: {'value': {}}")).to_be_visible()
     expect(app.get_by_text("Range change count: 0")).to_be_visible()
     expect(app.get_by_text("Text change count: 0")).to_be_visible()
 
@@ -38,6 +38,7 @@ def test_stateful_interactions(app: Page):
             "Result: {'delta_generator': DeltaGenerator(), 'range': '10', 'text': None}"
         )
     ).to_be_visible()
+    expect(app.get_by_text("session_state: {'value': {'range': '10'}}")).to_be_visible()
     expect(app.get_by_text("Range change count: 1")).to_be_visible()
     expect(app.get_by_text("Text change count: 0")).to_be_visible()
 
@@ -52,6 +53,9 @@ def test_stateful_interactions(app: Page):
         )
     ).to_be_visible()
 
+    expect(
+        app.get_by_text("session_state: {'value': {'range': '10', 'text': 'Hello'}}")
+    ).to_be_visible()
     expect(app.get_by_text("Range change count: 1")).to_be_visible()
     expect(app.get_by_text("Text change count: 1")).to_be_visible()
 
@@ -61,6 +65,9 @@ def test_stateful_interactions(app: Page):
         app.get_by_text(
             "Result: {'delta_generator': DeltaGenerator(), 'range': '10', 'text': 'Hello'}"
         )
+    ).to_be_visible()
+    expect(
+        app.get_by_text("session_state: {'value': {'range': '10', 'text': 'Hello'}}")
     ).to_be_visible()
     expect(app.get_by_text("Range change count: 1")).to_be_visible()
     expect(app.get_by_text("Text change count: 1")).to_be_visible()

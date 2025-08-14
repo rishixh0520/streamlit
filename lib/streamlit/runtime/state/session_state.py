@@ -19,13 +19,7 @@ import pickle
 from collections.abc import Iterator, KeysView, MutableMapping
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Final,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Final, Union, cast
 
 from typing_extensions import TypeAlias
 
@@ -45,6 +39,7 @@ from streamlit.runtime.state.common import (
     is_element_id,
     is_keyed_element_id,
 )
+from streamlit.runtime.state.presentation import present_for_session
 from streamlit.runtime.state.query_params import QueryParams
 from streamlit.runtime.stats import CacheStat, CacheStatsProvider, group_stats
 
@@ -392,7 +387,8 @@ class SessionState:
             elif is_keyed_element_id(k) and not _is_internal_key(k):
                 try:
                     key = wid_key_map[k]
-                    state[key] = self[k]
+                    base_value = self[k]
+                    state[key] = present_for_session(self, k, base_value)
                 except KeyError:
                     # Widget id no longer maps to a key, it is a not yet
                     # cleared value in old state for a reset widget
@@ -441,7 +437,12 @@ class SessionState:
             # the "key" is a raw widget id, so get its associated user key for lookup
             key = wid_key_map[widget_id]
         try:
-            return self._getitem(widget_id, key)
+            base_value = self._getitem(widget_id, key)
+            return (
+                present_for_session(self, widget_id, base_value)
+                if widget_id is not None
+                else base_value
+            )
         except KeyError:
             raise KeyError(_missing_key_error_message(key))
 
