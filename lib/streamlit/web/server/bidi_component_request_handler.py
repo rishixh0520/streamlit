@@ -128,4 +128,4 @@ class BidiComponentRequestHandler(tornado.web.RequestHandler):
     @staticmethod
     def get_url(file_id: str) -> str:
         """Return the URL for a component file with the given ID."""
-        return f"bidi_components/{file_id}"
+        return f"bidi-components/{file_id}"

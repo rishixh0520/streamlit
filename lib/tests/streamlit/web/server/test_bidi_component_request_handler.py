@@ -79,7 +79,7 @@ class BidiComponentRequestHandlerTest(tornado.testing.AsyncHTTPTestCase):
         return tornado.web.Application(
             [
                 (
-                    r"/bidi_components/(.*)",
+                    r"/bidi-components/(.*)",
                     BidiComponentRequestHandler,
                     {"component_manager": self.component_manager},
                 )
@@ -87,12 +87,12 @@ class BidiComponentRequestHandlerTest(tornado.testing.AsyncHTTPTestCase):
         )
 
     def test_get_component_file(self) -> None:
-        response = self.fetch("/bidi_components/test_component/index.js")
+        response = self.fetch("/bidi-components/test_component/index.js")
         assert response.code == 200
         assert response.body.decode() == "console.log('test component');"
 
     def test_component_not_found(self) -> None:
-        response = self.fetch("/bidi_components/nonexistent_component/index.js")
+        response = self.fetch("/bidi-components/nonexistent_component/index.js")
         assert response.code == 404
 
     def test_component_path_not_found(self) -> None:
@@ -103,7 +103,7 @@ class BidiComponentRequestHandlerTest(tornado.testing.AsyncHTTPTestCase):
                 js="console.log('no path');",
             )
         )
-        response = self.fetch("/bidi_components/no_path_component/index.js")
+        response = self.fetch("/bidi-components/no_path_component/index.js")
         assert response.code == 404
 
     def test_multiple_file_components(self) -> None:
@@ -119,32 +119,32 @@ class BidiComponentRequestHandlerTest(tornado.testing.AsyncHTTPTestCase):
         )
 
         # JS should be accessible
-        response = self.fetch("/bidi_components/multi_file_component/index.js")
+        response = self.fetch("/bidi-components/multi_file_component/index.js")
         assert response.code == 200
         assert response.body.decode() == "console.log('test component');"
 
         # HTML files should NOT be accessible through the file handler
         # since HTML is only accepted as a string
-        response = self.fetch("/bidi_components/multi_file_component/index.html")
+        response = self.fetch("/bidi-components/multi_file_component/index.html")
         assert response.code == 404
 
         # CSS should be accessible
-        response = self.fetch("/bidi_components/multi_file_component/styles.css")
+        response = self.fetch("/bidi-components/multi_file_component/styles.css")
         assert response.code == 200
         assert response.body.decode() == "div { color: red; }"
 
     def test_disallow_path_traversal(self) -> None:
         # Attempt path traversal attack
-        response = self.fetch("/bidi_components/test_component/../../../etc/passwd")
+        response = self.fetch("/bidi-components/test_component/../../../etc/passwd")
         assert response.code == 403
 
     def test_file_not_found_in_component_dir(self) -> None:
-        response = self.fetch("/bidi_components/test_component/nonexistent.js")
+        response = self.fetch("/bidi-components/test_component/nonexistent.js")
         assert response.code == 404
 
     def test_get_url(self) -> None:
         url = BidiComponentRequestHandler.get_url("test_component/index.js")
-        assert url == "bidi_components/test_component/index.js"
+        assert url == "bidi-components/test_component/index.js"
 
 
 if __name__ == "__main__":

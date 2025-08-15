@@ -136,7 +136,7 @@ UNIX_SOCKET_PREFIX: Final = "unix://"
 # as the endpoints in frontend/connection/src/DefaultStreamlitEndpoints
 MEDIA_ENDPOINT: Final = "/media"
 COMPONENT_ENDPOINT: Final = "/component"
-BIDI_COMPONENT_ENDPOINT: Final = "/bidi_components"
+BIDI_COMPONENT_ENDPOINT: Final = "/bidi-components"
 STATIC_SERVING_ENDPOINT: Final = "/app/static"
 UPLOAD_FILE_ENDPOINT: Final = "/_stcore/upload_file"
 STREAM_ENDPOINT: Final = r"_stcore/stream"

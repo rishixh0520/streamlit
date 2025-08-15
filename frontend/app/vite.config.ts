@@ -96,7 +96,7 @@ export default defineConfig({
         target: DEV_SERVER_BACKEND_URL,
         changeOrigin: true,
       },
-      "^.*/bidi_components/.*": {
+      "^.*/bidi-components/.*": {
         target: DEV_SERVER_BACKEND_URL,
         changeOrigin: true,
       },
