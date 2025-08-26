@@ -111,7 +111,8 @@ def test_init(mock_callback):
     assert watcher._component_update_callback is mock_callback
     assert not watcher.is_watching_active
     assert watcher._watched_directories == {}
-    assert watcher._watched_files == {}
+    # Directory-only: no file watcher state exists anymore
+    assert not hasattr(watcher, "_watched_files") or watcher._watched_files == {}
     assert watcher._path_watchers == []
     assert watcher._glob_watchers == {}
 
@@ -166,12 +167,9 @@ def test_start_file_watching_direct_file_paths(
     # Should be watching
     assert file_watcher.is_watching_active
 
-    # Should have created watchers for individual files
-    assert len(file_watcher._path_watchers) == 2  # JS and CSS files
-    assert len(file_watcher._watched_files) == 2
-    assert (
-        len(file_watcher._watched_directories) == 0
-    )  # No directories for direct paths
+    # With directory-only approach: two parent directories (js, css)
+    assert len(file_watcher._path_watchers) == 2
+    assert len(file_watcher._watched_directories) == 2
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
@@ -206,9 +204,7 @@ def test_start_file_watching_glob_patterns(
     # Should have created watchers for directories
     assert len(file_watcher._path_watchers) == 2  # JS and CSS directories
     assert len(file_watcher._watched_directories) == 2
-    assert (
-        len(file_watcher._watched_files) == 0
-    )  # No individual files for glob patterns
+    # No individual file watchers in directory-only approach
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
@@ -253,10 +249,11 @@ def test_start_file_watching_mixed_patterns(
     # Should be watching
     assert file_watcher.is_watching_active
 
-    # Should have both types of watchers
-    assert len(file_watcher._path_watchers) == 2  # One file, one directory
-    assert len(file_watcher._watched_directories) == 1  # CSS directory for glob
-    assert len(file_watcher._watched_files) == 1  # JS file for direct path
+    # Directory-only: two directories (parent js, css glob)
+    assert len(file_watcher._path_watchers) == 2
+    assert (
+        len(file_watcher._watched_directories) == 2
+    )  # parent(dir js) + css dir for glob
 
 
 def test_stop_file_watching(file_watcher):
@@ -266,7 +263,7 @@ def test_stop_file_watching(file_watcher):
     mock_watcher2 = Mock()
     file_watcher._path_watchers = [mock_watcher1, mock_watcher2]
     file_watcher._watched_directories = {"dir1": ["comp1"]}
-    file_watcher._watched_files = {"file1": ["comp2"]}
+    # No file watchers in directory-only approach
     file_watcher._watching_active = True
 
     file_watcher.stop_file_watching()
@@ -279,7 +276,7 @@ def test_stop_file_watching(file_watcher):
     assert not file_watcher.is_watching_active
     assert file_watcher._path_watchers == []
     assert file_watcher._watched_directories == {}
-    assert file_watcher._watched_files == {}
+    assert file_watcher._watched_directories == {}
 
 
 def test_stop_file_watching_with_close_errors(file_watcher):
@@ -470,6 +467,135 @@ def test_change_events_ignored_when_not_watching(mock_dev_mode, file_watcher):
     file_watcher._handle_component_change(["test.component"])
 
     file_watcher._component_update_callback.assert_not_called()
+
+
+@patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
+@patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
+def test_glob_directory_watches_recursively(
+    mock_path_watcher_class,
+    mock_dev_mode,
+    file_watcher,
+    temp_component_files,
+    mock_glob_component_manifest,
+):
+    """Ensure directory watchers created for glob patterns use recursive "**/*" globs.
+
+    We expect the watcher to pass a recursive glob_pattern to include transitive
+    files in subdirectories, so changes in nested paths also trigger updates.
+    """
+    mock_dev_mode.return_value = True
+
+    # Mock the watcher class constructor; we care about constructor call kwargs
+    mock_watcher_instance = Mock()
+    watcher_class_mock = Mock(return_value=mock_watcher_instance)
+    mock_path_watcher_class.return_value = watcher_class_mock
+
+    glob_info = ComponentGlobInfo(
+        component_name="test.glob_recursive",
+        manifest=mock_glob_component_manifest,
+        package_root=temp_component_files["temp_dir"],
+        js_pattern="js/component-*.js",  # Glob pattern -> directory watch
+        css_pattern=None,
+    )
+
+    file_watcher.start_file_watching({"test.glob_recursive": glob_info})
+
+    # One directory watcher should have been created for the JS glob
+    assert watcher_class_mock.call_count == 1
+
+    # Assert glob_pattern="**/*" for recursive watching
+    call_kwargs = watcher_class_mock.call_args.kwargs
+    assert call_kwargs.get("glob_pattern") == "**/*"
+
+
+@patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
+@patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
+def test_direct_file_also_watches_parent_directory_recursively(
+    mock_path_watcher_class,
+    mock_dev_mode,
+    file_watcher,
+    temp_component_files,
+    mock_component_manifest,
+):
+    """Ensure direct file paths register a recursive parent directory watcher.
+
+    Directory-only approach: expect exactly one directory watcher with
+    glob_pattern="**/*" for the parent directory.
+    """
+    mock_dev_mode.return_value = True
+
+    mock_watcher_instance = Mock()
+    watcher_class_mock = Mock(return_value=mock_watcher_instance)
+    mock_path_watcher_class.return_value = watcher_class_mock
+
+    glob_info = ComponentGlobInfo(
+        component_name="test.direct_parent",
+        manifest=mock_component_manifest,
+        package_root=temp_component_files["temp_dir"],
+        js_pattern="js/component.js",  # Direct file
+        css_pattern=None,
+    )
+
+    file_watcher.start_file_watching({"test.direct_parent": glob_info})
+
+    # Expect exactly one directory watcher (parent dir), recursive
+    assert watcher_class_mock.call_count == 1
+    assert watcher_class_mock.call_args.kwargs.get("glob_pattern") == "**/*"
+
+
+@patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
+@patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
+def test_ignores_noisy_directories_in_callbacks(
+    mock_path_watcher_class,
+    mock_dev_mode,
+    file_watcher,
+    temp_component_files,
+    mock_glob_component_manifest,
+):
+    """Ensure change events under noisy directories (e.g., node_modules) are ignored.
+
+    This prevents rebuild loops and unnecessary updates when tooling writes under
+    typical build/cache directories. We simulate a change event by invoking the
+    registered watcher callback directly with a path under node_modules.
+    """
+    mock_dev_mode.return_value = True
+
+    mock_watcher_instance = Mock()
+    watcher_class_mock = Mock(return_value=mock_watcher_instance)
+    mock_path_watcher_class.return_value = watcher_class_mock
+
+    glob_info = ComponentGlobInfo(
+        component_name="test.glob_ignore",
+        manifest=mock_glob_component_manifest,
+        package_root=temp_component_files["temp_dir"],
+        js_pattern="js/component-*.js",
+        css_pattern=None,
+    )
+
+    file_watcher.start_file_watching({"test.glob_ignore": glob_info})
+
+    # Prepare deterministic update path by forcing re-resolve to return data
+    with patch.object(file_watcher, "_re_resolve_component_patterns") as mock_resolve:
+        mock_resolve.return_value = {
+            "name": "test.glob_ignore",
+            "js": temp_component_files["glob_js_file"],
+            "css": None,
+            "html": "<div>Glob Component</div>",
+        }
+
+        # Extract the callback passed to the watcher class and invoke it with a noisy path
+        assert watcher_class_mock.call_count == 1
+        cb = watcher_class_mock.call_args.args[1]
+        noisy_path = str(
+            (
+                temp_component_files["temp_dir"] / "js" / "node_modules" / "dep.js"
+            ).resolve()
+        )
+
+        cb(noisy_path)
+
+        # Expect no update callback when the change is under a noisy directory
+        file_watcher._component_update_callback.assert_not_called()
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")

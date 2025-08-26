@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 from typing import TYPE_CHECKING, Any, Callable, Final
 
@@ -63,8 +64,15 @@ class ComponentFileWatcher:
         # Store glob watchers for re-resolution
         self._glob_watchers: dict[str, ComponentGlobInfo] = {}
 
-        # Track individual files being watched
-        self._watched_files: dict[str, list[str]] = {}  # file_path -> component_names
+        # Default noisy directories to ignore in callbacks
+        self._ignored_dirs: tuple[str, ...] = (
+            "node_modules",
+            ".git",
+            "__pycache__",
+            ".cache",
+            "coverage",
+            "venv",
+        )
 
     @property
     def is_watching_active(self) -> bool:
@@ -107,7 +115,6 @@ class ComponentFileWatcher:
 
             self._path_watchers.clear()
             self._watched_directories.clear()
-            self._watched_files.clear()
             self._watching_active = False
             _LOGGER.debug("Stopped file watching for component registry")
 
@@ -128,18 +135,16 @@ class ComponentFileWatcher:
 
                 path_watcher_class = get_default_path_watcher_class()
 
-                # Collect patterns to watch
-                directories_to_watch, files_to_watch = self._collect_patterns_to_watch()
+                # Collect patterns to watch (directory-only)
+                directories_to_watch = self._collect_patterns_to_watch()
 
-                # Setup watchers
+                # Setup watchers (directories only)
                 self._setup_directory_watchers(path_watcher_class, directories_to_watch)
-                self._setup_file_watchers(path_watcher_class, files_to_watch)
 
                 self._watching_active = True
                 _LOGGER.debug(
-                    "Started file watching for %d directories and %d files",
+                    "Started file watching for %d directories",
                     len(self._watched_directories),
-                    len(self._watched_files),
                 )
 
             except ImportError:
@@ -147,19 +152,15 @@ class ComponentFileWatcher:
             except Exception as e:
                 _LOGGER.warning("Failed to start file watching: %s", e)
 
-    def _collect_patterns_to_watch(
-        self,
-    ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-        """Collect patterns to watch and group them by directories and files.
+    def _collect_patterns_to_watch(self) -> dict[str, list[str]]:
+        """Collect patterns to watch and group them by directories.
 
         Returns
         -------
-        tuple[dict[str, list[str]], dict[str, list[str]]]
-            A tuple of (directories_to_watch, files_to_watch) where each maps
-            paths to lists of component names.
+        dict[str, list[str]]
+            A mapping of directories to lists of component names.
         """
         directories_to_watch: dict[str, list[str]] = {}
-        files_to_watch: dict[str, list[str]] = {}
 
         for comp_name, glob_info in self._glob_watchers.items():
             # Process JS pattern
@@ -169,7 +170,6 @@ class ComponentFileWatcher:
                     package_root=glob_info.package_root,
                     comp_name=comp_name,
                     directories_to_watch=directories_to_watch,
-                    files_to_watch=files_to_watch,
                 )
 
             # Process CSS pattern
@@ -179,10 +179,8 @@ class ComponentFileWatcher:
                     package_root=glob_info.package_root,
                     comp_name=comp_name,
                     directories_to_watch=directories_to_watch,
-                    files_to_watch=files_to_watch,
                 )
-
-        return directories_to_watch, files_to_watch
+        return directories_to_watch
 
     def _process_pattern_for_watching(
         self,
@@ -190,7 +188,6 @@ class ComponentFileWatcher:
         package_root: Path,
         comp_name: str,
         directories_to_watch: dict[str, list[str]],
-        files_to_watch: dict[str, list[str]],
     ) -> None:
         """Process a single pattern and add it to the appropriate watching collection.
 
@@ -204,9 +201,9 @@ class ComponentFileWatcher:
             The component name
         directories_to_watch : dict[str, list[str]]
             Dictionary to collect directory watches
-        files_to_watch : dict[str, list[str]]
-            Dictionary to collect file watches
+
         """
+        # Directory-only approach; no file watcher collection required.
         if ComponentPathUtils.has_glob_characters(pattern):
             # It's a glob pattern - watch the directory
             search_path = package_root / pattern
@@ -216,12 +213,13 @@ class ComponentFileWatcher:
             if comp_name not in directories_to_watch[directory]:
                 directories_to_watch[directory].append(comp_name)
         else:
-            # It's a direct file path - watch the specific file
-            file_path = str((package_root / pattern).resolve())
-            if file_path not in files_to_watch:
-                files_to_watch[file_path] = []
-            if comp_name not in files_to_watch[file_path]:
-                files_to_watch[file_path].append(comp_name)
+            # It's a direct file path - only watch the parent directory recursively
+            resolved_file = (package_root / pattern).resolve()
+            directory = str(resolved_file.parent)
+            if directory not in directories_to_watch:
+                directories_to_watch[directory] = []
+            if comp_name not in directories_to_watch[directory]:
+                directories_to_watch[directory].append(comp_name)
 
     def _setup_directory_watchers(
         self, path_watcher_class: type, directories_to_watch: dict[str, list[str]]
@@ -240,6 +238,11 @@ class ComponentFileWatcher:
                 # Create a closure to capture the component names for this directory
                 def create_callback(comps: list[str]) -> Callable[[str], None]:
                     def callback(changed_path: str) -> None:
+                        if self._is_in_ignored_directory(changed_path):
+                            _LOGGER.debug(
+                                "Ignoring change in noisy directory: %s", changed_path
+                            )
+                            return
                         _LOGGER.debug(
                             "Directory change detected: %s, checking components: %s",
                             changed_path,
@@ -254,7 +257,7 @@ class ComponentFileWatcher:
                 watcher = path_watcher_class(
                     directory,
                     create_callback(component_names),
-                    glob_pattern="*",
+                    glob_pattern="**/*",
                     allow_nonexistent=False,
                 )
                 self._path_watchers.append(watcher)
@@ -267,48 +270,7 @@ class ComponentFileWatcher:
             except Exception:  # noqa: PERF203
                 _LOGGER.exception("Failed to start watching directory %s", directory)
 
-    def _setup_file_watchers(
-        self, path_watcher_class: type, files_to_watch: dict[str, list[str]]
-    ) -> None:
-        """Setup watchers for specific files.
-
-        Parameters
-        ----------
-        path_watcher_class : type
-            The path watcher class to use
-        files_to_watch : dict[str, list[str]]
-            Files to watch and their associated component names
-        """
-        for file_path, component_names in files_to_watch.items():
-            try:
-                # Create a closure to capture the component names for this file
-                def create_file_callback(comps: list[str]) -> Callable[[str], None]:
-                    def callback(changed_path: str) -> None:
-                        _LOGGER.debug(
-                            "File change detected: %s, checking components: %s",
-                            changed_path,
-                            comps,
-                        )
-                        self._handle_component_change(comps)
-
-                    return callback
-
-                # Watch the specific file
-                watcher = path_watcher_class(
-                    file_path,
-                    create_file_callback(component_names),
-                    glob_pattern=None,  # Watch the specific file
-                    allow_nonexistent=True,  # File might not exist yet
-                )
-                self._path_watchers.append(watcher)
-                self._watched_files[file_path] = component_names
-                _LOGGER.debug(
-                    "Started watching file %s for components: %s",
-                    file_path,
-                    component_names,
-                )
-            except Exception:  # noqa: PERF203
-                _LOGGER.exception("Failed to start watching file %s", file_path)
+    # File watcher setup removed (directory-only approach)
 
     def _handle_component_change(self, affected_components: list[str]) -> None:
         """Handle component changes for both directory and file events.
@@ -342,6 +304,21 @@ class ComponentFileWatcher:
                 "Updated component definitions due to file changes: %s",
                 updated_components,
             )
+
+    def _is_in_ignored_directory(self, changed_path: str) -> bool:
+        """Return True if the changed path is inside an ignored directory.
+
+        Parameters
+        ----------
+        changed_path : str
+            The filesystem path that triggered the change event.
+        """
+        try:
+            abs_path = os.path.realpath(changed_path)
+            parts = set(abs_path.split(os.sep))
+            return any(ignored in parts for ignored in self._ignored_dirs)
+        except Exception:
+            return False
 
     def _re_resolve_component_patterns(self, comp_name: str) -> dict[str, Any] | None:
         """Re-resolve patterns/paths for a component and return updated definition data.
