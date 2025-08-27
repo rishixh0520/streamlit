@@ -24,7 +24,6 @@ describe("BidiComponent/utils/theme", () => {
   describe("objectToCssCustomProperties", () => {
     it("should convert ComponentsV2Theme to CSS custom properties", () => {
       const input: StreamlitTheme = {
-        base: "light",
         primaryColor: "#ff0000",
         backgroundColor: "#ffffff",
         secondaryBackgroundColor: "#f0f0f0",
@@ -35,7 +34,6 @@ describe("BidiComponent/utils/theme", () => {
       const result = objectToCssCustomProperties(input)
 
       expect(result).toEqual({
-        "--st-base": "light",
         "--st-primary-color": "#ff0000",
         "--st-background-color": "#ffffff",
         "--st-secondary-background-color": "#f0f0f0",
@@ -46,7 +44,6 @@ describe("BidiComponent/utils/theme", () => {
 
     it("should use custom prefix when provided", () => {
       const input: StreamlitTheme = {
-        base: "dark",
         primaryColor: "#00ff00",
         backgroundColor: "#000000",
         secondaryBackgroundColor: "#1e1e1e",
@@ -57,7 +54,6 @@ describe("BidiComponent/utils/theme", () => {
       const result = objectToCssCustomProperties(input, "--custom")
 
       expect(result).toEqual({
-        "--custom-base": "dark",
         "--custom-primary-color": "#00ff00",
         "--custom-background-color": "#000000",
         "--custom-secondary-background-color": "#1e1e1e",
@@ -68,7 +64,6 @@ describe("BidiComponent/utils/theme", () => {
 
     it("should handle kebab-case conversion for property names", () => {
       const input: StreamlitTheme = {
-        base: "light",
         primaryColor: "#ff0000",
         backgroundColor: "#ffffff",
         secondaryBackgroundColor: "#f0f0f0",

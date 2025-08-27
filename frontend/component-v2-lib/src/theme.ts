@@ -36,7 +36,6 @@ type ObjectToCssCustomProperties<
  * The Streamlit theme properties that are exposed to the component.
  */
 export interface StreamlitTheme {
-  base: string
   primaryColor: string
   backgroundColor: string
   secondaryBackgroundColor: string

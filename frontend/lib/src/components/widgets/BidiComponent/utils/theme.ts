@@ -49,7 +49,6 @@ export const extractComponentsV2Theme = (
   theme: EmotionTheme
 ): StreamlitTheme => {
   const result: StreamlitTheme = {
-    base: theme.colors.base,
     primaryColor: theme.colors.primary,
     backgroundColor: theme.colors.bgColor,
     secondaryBackgroundColor: theme.colors.secondaryBg,
