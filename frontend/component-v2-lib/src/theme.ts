@@ -47,7 +47,7 @@ export interface StreamlitTheme {
   codeFont: string
   baseRadius: string
   buttonRadius: string
-  baseFontSize: number
+  baseFontSize: string
   baseFontWeight: number
   codeFontWeight: number
   codeFontSize: string

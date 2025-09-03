@@ -36,7 +36,7 @@ describe("BidiComponent/utils/theme", () => {
       codeFont: "Source Code Pro, monospace",
       baseRadius: "0.5rem",
       buttonRadius: "0.5rem",
-      baseFontSize: 16,
+      baseFontSize: "16px",
       baseFontWeight: 400,
       codeFontWeight: 400,
       codeFontSize: "0.875rem",
@@ -95,7 +95,6 @@ describe("BidiComponent/utils/theme", () => {
     })
 
     it.each<[key: keyof StreamlitTheme, value: number, expectedKey: string]>([
-      ["baseFontSize", 14, "--st-base-font-size"],
       ["baseFontWeight", 500, "--st-base-font-weight"],
       ["codeFontWeight", 700, "--st-code-font-weight"],
     ])("stringifies number %s", (propName, value, expectedKey) => {
@@ -103,6 +102,13 @@ describe("BidiComponent/utils/theme", () => {
       const result = objectToCssCustomProperties(createTheme(overrides))
       const dict = result as unknown as Record<string, string>
       expect(dict[expectedKey]).toBe(String(value))
+    })
+
+    it("serializes baseFontSize with px unit", () => {
+      const result = objectToCssCustomProperties(
+        createTheme({ baseFontSize: "14px" })
+      )
+      expect(result["--st-base-font-size"]).toBe("14px")
     })
 
     it.each<

@@ -65,7 +65,7 @@ export const extractComponentsV2Theme = (
     codeFont: theme.genericFonts.codeFont,
     baseRadius: theme.radii.default,
     buttonRadius: theme.radii.button,
-    baseFontSize: theme.fontSizes.baseFontSize,
+    baseFontSize: `${theme.fontSizes.baseFontSize}px`,
     baseFontWeight: theme.fontWeights.normal,
     codeFontWeight: theme.fontWeights.code,
     codeFontSize: theme.fontSizes.codeFontSize,
