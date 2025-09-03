@@ -76,7 +76,8 @@ HTML_CODE = f"""
 
 CSS_CODE = """
 div {
-color: red;
+    color: var(--st-primary-color);
+    background-color: var(--st-background-color);
 }
 """
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { describe, expect, it } from "vitest"
+import { describe, expect, expectTypeOf, it } from "vitest"
 
 import { StreamlitTheme } from "@streamlit/component-v2-lib"
 
@@ -22,62 +22,140 @@ import { objectToCssCustomProperties } from "~lib/components/widgets/BidiCompone
 
 describe("BidiComponent/utils/theme", () => {
   describe("objectToCssCustomProperties", () => {
-    it("should convert ComponentsV2Theme to CSS custom properties", () => {
-      const input: StreamlitTheme = {
-        primaryColor: "#ff0000",
-        backgroundColor: "#ffffff",
-        secondaryBackgroundColor: "#f0f0f0",
-        textColor: "#000000",
-        font: "Source Sans Pro, sans-serif",
-      }
-
-      const result = objectToCssCustomProperties(input)
-
-      expect(result).toEqual({
-        "--st-primary-color": "#ff0000",
-        "--st-background-color": "#ffffff",
-        "--st-secondary-background-color": "#f0f0f0",
-        "--st-text-color": "#000000",
-        "--st-font": "Source Sans Pro, sans-serif",
-      })
+    const createTheme = (
+      overrides: Partial<StreamlitTheme> = {}
+    ): StreamlitTheme => ({
+      primaryColor: "#ff0000",
+      backgroundColor: "#ffffff",
+      secondaryBackgroundColor: "#f0f0f0",
+      textColor: "#000000",
+      linkColor: "#0000ff",
+      linkUnderline: true,
+      bodyFont: "Source Sans Pro, sans-serif",
+      headingFont: "Source Sans Pro, sans-serif",
+      codeFont: "Source Code Pro, monospace",
+      baseRadius: "0.5rem",
+      buttonRadius: "0.5rem",
+      baseFontSize: 16,
+      baseFontWeight: 400,
+      codeFontWeight: 400,
+      codeFontSize: "0.875rem",
+      headingFontSizes: [
+        "2.75rem",
+        "2.25rem",
+        "1.75rem",
+        "1.5rem",
+        "1.25rem",
+        "1rem",
+      ],
+      headingFontWeights: [700, 600, 600, 600, 600, 600],
+      borderColor: "#eeeeee",
+      borderColorLight: "#f5f5f5",
+      dataframeBorderColor: "#f0f0f0",
+      dataframeHeaderBackgroundColor: "#fafafa",
+      codeBackgroundColor: "#f7f7f7",
+      codeTextColor: "#00aa00",
+      headingColor: "#111111",
+      chartCategoricalColors: Array(10).fill("#000000"),
+      chartSequentialColors: Array(10).fill("#111111"),
+      redColor: "#ff0000",
+      orangeColor: "#ff8800",
+      yellowColor: "#ffee00",
+      blueColor: "#0000ff",
+      greenColor: "#00ff00",
+      violetColor: "#aa00ff",
+      grayColor: "#888888",
+      redBackgroundColor: "rgba(255,0,0,0.1)",
+      orangeBackgroundColor: "rgba(255,136,0,0.1)",
+      yellowBackgroundColor: "rgba(255,238,0,0.1)",
+      blueBackgroundColor: "rgba(0,0,255,0.1)",
+      greenBackgroundColor: "rgba(0,255,0,0.1)",
+      violetBackgroundColor: "rgba(170,0,255,0.1)",
+      grayBackgroundColor: "rgba(136,136,136,0.1)",
+      ...overrides,
     })
 
-    it("should use custom prefix when provided", () => {
-      const input: StreamlitTheme = {
-        primaryColor: "#00ff00",
-        backgroundColor: "#000000",
-        secondaryBackgroundColor: "#1e1e1e",
-        textColor: "#ffffff",
-        font: "Arial, sans-serif",
-      }
-
-      const result = objectToCssCustomProperties(input, "--custom")
-
-      expect(result).toEqual({
-        "--custom-primary-color": "#00ff00",
-        "--custom-background-color": "#000000",
-        "--custom-secondary-background-color": "#1e1e1e",
-        "--custom-text-color": "#ffffff",
-        "--custom-font": "Arial, sans-serif",
-      })
+    it("converts theme to CSS custom properties", () => {
+      const input = createTheme()
+      const result = objectToCssCustomProperties(input)
+      expect(result["--st-primary-color"]).toBe("#ff0000")
+      expect(result["--st-background-color"]).toBe("#ffffff")
+      expect(result["--st-body-font"]).toBe("Source Sans Pro, sans-serif")
     })
 
-    it("should handle kebab-case conversion for property names", () => {
-      const input: StreamlitTheme = {
-        primaryColor: "#ff0000",
-        backgroundColor: "#ffffff",
-        secondaryBackgroundColor: "#f0f0f0",
-        textColor: "#000000",
-        font: "Roboto, sans-serif",
+    it.each([
+      [true, "1"],
+      [false, "0"],
+    ])("serializes boolean linkUnderline %s to '%s'", (value, expected) => {
+      const result = objectToCssCustomProperties(
+        createTheme({ linkUnderline: value })
+      )
+      expect(result["--st-link-underline"]).toBe(expected)
+      expectTypeOf(result["--st-link-underline"]).toEqualTypeOf<string>()
+    })
+
+    it.each<[key: keyof StreamlitTheme, value: number, expectedKey: string]>([
+      ["baseFontSize", 14, "--st-base-font-size"],
+      ["baseFontWeight", 500, "--st-base-font-weight"],
+      ["codeFontWeight", 700, "--st-code-font-weight"],
+    ])("stringifies number %s", (propName, value, expectedKey) => {
+      const overrides = { [propName]: value } as Partial<StreamlitTheme>
+      const result = objectToCssCustomProperties(createTheme(overrides))
+      const dict = result as unknown as Record<string, string>
+      expect(dict[expectedKey]).toBe(String(value))
+    })
+
+    it.each<
+      [
+        key: keyof StreamlitTheme,
+        value: string[] | number[],
+        expectedKey: string,
+      ]
+    >([
+      [
+        "headingFontSizes",
+        ["3rem", "2.5rem", "2rem", "1.5rem", "1.25rem", "1rem"],
+        "--st-heading-font-sizes",
+      ],
+      [
+        "headingFontWeights",
+        [800, 700, 600, 600, 600, 500],
+        "--st-heading-font-weights",
+      ],
+      [
+        "chartCategoricalColors",
+        [
+          "#111111",
+          "#222222",
+          "#333333",
+          "#444444",
+          "#555555",
+          "#666666",
+          "#777777",
+          "#888888",
+          "#999999",
+          "#aaaaaa",
+        ],
+        "--st-chart-categorical-colors",
+      ],
+    ])(
+      "serializes array %s as comma-joined string",
+      (propName, value, key) => {
+        const overrides = {
+          [propName]: value as never,
+        } as Partial<StreamlitTheme>
+        const result = objectToCssCustomProperties(createTheme(overrides))
+        const dict = result as unknown as Record<string, string>
+        expect(dict[key]).toBe((value as (string | number)[]).join(","))
       }
+    )
 
-      const result = objectToCssCustomProperties(input)
-
-      // Verify that camelCase properties are converted to kebab-case
-      expect(result).toHaveProperty("--st-primary-color")
-      expect(result).toHaveProperty("--st-background-color")
-      expect(result).toHaveProperty("--st-secondary-background-color")
-      expect(result).toHaveProperty("--st-text-color")
+    it("supports custom prefix", () => {
+      const result = objectToCssCustomProperties(createTheme(), "--custom")
+      const custom = result as unknown as Record<string, string>
+      expect(custom["--custom-primary-color"]).toBe("#ff0000")
+      expect(custom["--custom-background-color"]).toBe("#ffffff")
+      expect(custom["--custom-text-color"]).toBe("#000000")
     })
   })
 })

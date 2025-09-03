@@ -36,11 +36,51 @@ type ObjectToCssCustomProperties<
  * The Streamlit theme properties that are exposed to the component.
  */
 export interface StreamlitTheme {
+  // Direct inputs from theme config.toml
   primaryColor: string
   backgroundColor: string
   secondaryBackgroundColor: string
   textColor: string
-  font: string
+  linkColor: string
+  linkUnderline: boolean
+  headingFont: string
+  codeFont: string
+  baseRadius: string
+  buttonRadius: string
+  baseFontSize: number
+  baseFontWeight: number
+  codeFontWeight: number
+  codeFontSize: string
+  headingFontSizes: string[]
+  headingFontWeights: number[]
+  borderColor: string
+  dataframeBorderColor: string
+  dataframeHeaderBackgroundColor: string
+  codeBackgroundColor: string
+  chartCategoricalColors: string[]
+  chartSequentialColors: string[]
+
+  // Computed
+  bodyFont: string
+  headingColor: string
+  borderColorLight: string
+  codeTextColor: string
+
+  // Color palette
+  redColor: string
+  orangeColor: string
+  yellowColor: string
+  blueColor: string
+  greenColor: string
+  violetColor: string
+  grayColor: string
+  redBackgroundColor: string
+  orangeBackgroundColor: string
+  yellowBackgroundColor: string
+  blueBackgroundColor: string
+  greenBackgroundColor: string
+  violetBackgroundColor: string
+  grayBackgroundColor: string
 }
 
 /**

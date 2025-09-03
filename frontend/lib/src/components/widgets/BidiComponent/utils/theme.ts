@@ -33,9 +33,15 @@ export const objectToCssCustomProperties = (
 ): StreamlitThemeCssProperties => {
   const result: Record<string, string> = {}
 
-  Object.entries(obj).forEach(([key, value]) => {
+  Object.entries(obj).forEach(([key, value]: [string, unknown]) => {
     const kebabKey = kebabCase(key)
     const propertyName = `${prefix}-${kebabKey}`
+
+    if (typeof value === "boolean") {
+      result[propertyName] = value ? "1" : "0"
+      return
+    }
+
     result[propertyName] = String(value)
   })
 
@@ -48,13 +54,63 @@ export const objectToCssCustomProperties = (
 export const extractComponentsV2Theme = (
   theme: EmotionTheme
 ): StreamlitTheme => {
-  const result: StreamlitTheme = {
+  return {
     primaryColor: theme.colors.primary,
     backgroundColor: theme.colors.bgColor,
     secondaryBackgroundColor: theme.colors.secondaryBg,
     textColor: theme.colors.bodyText,
-    font: theme.fonts.sansSerif,
-  }
+    linkColor: theme.colors.link,
+    linkUnderline: theme.linkUnderline,
+    headingFont: theme.genericFonts.headingFont,
+    codeFont: theme.genericFonts.codeFont,
+    baseRadius: theme.radii.default,
+    buttonRadius: theme.radii.button,
+    baseFontSize: theme.fontSizes.baseFontSize,
+    baseFontWeight: theme.fontWeights.normal,
+    codeFontWeight: theme.fontWeights.code,
+    codeFontSize: theme.fontSizes.codeFontSize,
+    headingFontSizes: [
+      theme.fontSizes.h1FontSize,
+      theme.fontSizes.h2FontSize,
+      theme.fontSizes.h3FontSize,
+      theme.fontSizes.h4FontSize,
+      theme.fontSizes.h5FontSize,
+      theme.fontSizes.h6FontSize,
+    ],
+    headingFontWeights: [
+      theme.fontWeights.h1FontWeight,
+      theme.fontWeights.h2FontWeight,
+      theme.fontWeights.h3FontWeight,
+      theme.fontWeights.h4FontWeight,
+      theme.fontWeights.h5FontWeight,
+      theme.fontWeights.h6FontWeight,
+    ],
+    borderColor: theme.colors.borderColor,
+    dataframeBorderColor: theme.colors.dataframeBorderColor,
+    dataframeHeaderBackgroundColor:
+      theme.colors.dataframeHeaderBackgroundColor,
+    codeBackgroundColor: theme.colors.codeBackgroundColor,
+    chartCategoricalColors: theme.colors.chartCategoricalColors,
+    chartSequentialColors: theme.colors.chartSequentialColors,
 
-  return result
+    bodyFont: theme.genericFonts.bodyFont,
+    headingColor: theme.colors.headingColor,
+    borderColorLight: theme.colors.borderColorLight,
+    codeTextColor: theme.colors.codeTextColor,
+
+    redColor: theme.colors.redColor,
+    orangeColor: theme.colors.orangeColor,
+    yellowColor: theme.colors.yellowColor,
+    blueColor: theme.colors.blueColor,
+    greenColor: theme.colors.greenColor,
+    violetColor: theme.colors.violetColor,
+    grayColor: theme.colors.grayColor,
+    redBackgroundColor: theme.colors.redBackgroundColor,
+    orangeBackgroundColor: theme.colors.orangeBackgroundColor,
+    yellowBackgroundColor: theme.colors.yellowBackgroundColor,
+    blueBackgroundColor: theme.colors.blueBackgroundColor,
+    greenBackgroundColor: theme.colors.greenBackgroundColor,
+    violetBackgroundColor: theme.colors.violetBackgroundColor,
+    grayBackgroundColor: theme.colors.grayBackgroundColor,
+  }
 }
