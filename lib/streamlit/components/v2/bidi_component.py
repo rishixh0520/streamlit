@@ -448,6 +448,7 @@ class BidiComponentMixin:
             component_name,
             user_key=key,
             dg=self.dg,
+            key_as_main_identity=True,
         )
 
         # ------------------------------------------------------------------
