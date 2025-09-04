@@ -90,10 +90,10 @@ export const extractComponentsV2Theme = (
     dataframeHeaderBackgroundColor:
       theme.colors.dataframeHeaderBackgroundColor,
     codeBackgroundColor: theme.colors.codeBackgroundColor,
+    font: theme.genericFonts.bodyFont,
     chartCategoricalColors: theme.colors.chartCategoricalColors,
     chartSequentialColors: theme.colors.chartSequentialColors,
 
-    bodyFont: theme.genericFonts.bodyFont,
     headingColor: theme.colors.headingColor,
     borderColorLight: theme.colors.borderColorLight,
     codeTextColor: theme.colors.codeTextColor,

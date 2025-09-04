@@ -31,7 +31,7 @@ describe("BidiComponent/utils/theme", () => {
       textColor: "#000000",
       linkColor: "#0000ff",
       linkUnderline: true,
-      bodyFont: "Source Sans Pro, sans-serif",
+      font: "Source Sans Pro, sans-serif",
       headingFont: "Source Sans Pro, sans-serif",
       codeFont: "Source Code Pro, monospace",
       baseRadius: "0.5rem",
@@ -80,7 +80,7 @@ describe("BidiComponent/utils/theme", () => {
       const result = objectToCssCustomProperties(input)
       expect(result["--st-primary-color"]).toBe("#ff0000")
       expect(result["--st-background-color"]).toBe("#ffffff")
-      expect(result["--st-body-font"]).toBe("Source Sans Pro, sans-serif")
+      expect(result["--st-font"]).toBe("Source Sans Pro, sans-serif")
     })
 
     it.each([
