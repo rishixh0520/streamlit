@@ -1216,3 +1216,99 @@ def test_component_glob_info_tracking() -> None:
 
         assert found_js_pattern, "JS glob pattern should be tracked"
         assert found_css_pattern, "CSS glob pattern should be tracked"
+
+
+@pytest.mark.parametrize(
+    ("target_field", "second_args", "expect_present_field"),
+    [
+        ("html", {"js": "export default function(){}"}, "js"),
+        ("css", {"js": "export default function(){}"}, "js"),
+        ("js", {"html": "<div>Updated</div>"}, "html"),
+    ],
+)
+def test_runtime_override_removes_field(
+    monkeypatch, target_field, second_args, expect_present_field
+) -> None:
+    """Verify that removing a field in a subsequent registration clears it.
+
+    We first register a component with multiple fields set. Then, we call the
+    public API again omitting the target field. The registry should update the
+    definition so that the target field is None, rather than preserving it.
+    """
+    from streamlit.components.v2 import component as component_api
+    from streamlit.components.v2.component_manager import BidiComponentManager
+
+    manager = BidiComponentManager()
+
+    # Patch the component API to use our local manager instance.
+    monkeypatch.setattr(
+        "streamlit.components.v2.get_bidi_component_manager",
+        lambda: manager,
+    )
+
+    # Initial registration includes all three fields to keep flexibility
+    component_api(
+        "my_component",
+        html="<h1>Hello World</h1>",
+        css=".title{color:red;}",
+        js="export default function(){}",
+    )
+
+    # Subsequent registration provides only a non-target field to keep valid
+    component_api("my_component", **second_args)
+
+    definition = manager.get("my_component")
+    assert definition is not None
+    # Target field should be cleared
+    assert getattr(definition, target_field) is None
+    # Provided non-target field should remain present
+    assert getattr(definition, expect_present_field) is not None
+
+
+@pytest.mark.parametrize(
+    ("target_field", "initial_kwargs", "update_kwargs", "expect_present_field"),
+    [
+        (
+            "html",
+            {"html": "<div>Keep?</div>", "js": "console.log('js');"},
+            {"html": None},
+            "js",
+        ),
+        (
+            "css",
+            {"css": "body{color:red;}", "js": "console.log('js');"},
+            {"css": None},
+            "js",
+        ),
+        (
+            "js",
+            {"html": "<div>Keep?</div>", "js": "console.log('js');"},
+            {"js": None},
+            "html",
+        ),
+    ],
+)
+def test_update_component_allows_field_removal(
+    target_field: str,
+    initial_kwargs: dict[str, str],
+    update_kwargs: dict[str, None],
+    expect_present_field: str,
+) -> None:
+    """Ensure update_component clears a field when explicitly set to None.
+
+    Presence of a key in the update (even if None) must override previous values.
+    """
+    manager = BidiComponentManager()
+
+    # Register with at least two fields so clearing one remains valid.
+    manager.register(BidiComponentDefinition(name="removal_test", **initial_kwargs))
+
+    # Explicitly remove target via update (omit other fields to preserve them)
+    manager.registry.update_component(
+        "removal_test", {"name": "removal_test", **update_kwargs}
+    )
+
+    updated = manager.get("removal_test")
+    assert updated is not None
+    assert getattr(updated, target_field) is None
+    assert getattr(updated, expect_present_field) is not None

@@ -104,14 +104,17 @@ def _register_component(
     existing_def = registry.get(component_key)
 
     if existing_def:
-        # Component exists from pyproject.toml - allow runtime override
-        if css is not None or js is not None:
-            # Create new definition with overrides
+        # Component exists from pyproject.toml - allow runtime override. Any
+        # provided field (including html) indicates an override operation.
+        if html is not None or css is not None or js is not None:
+            # Create a new definition using exactly the provided values. Fields
+            # omitted by the caller are cleared (set to None) so properties can
+            # be removed via subsequent registrations.
             new_def = BidiComponentDefinition(
                 name=component_key,
-                html=html if html is not None else existing_def.html,
-                css=css if css is not None else existing_def.css,
-                js=js if js is not None else existing_def.js,
+                html=html,
+                css=css,
+                js=js,
             )
             registry.register(new_def)
             _LOGGER.debug(

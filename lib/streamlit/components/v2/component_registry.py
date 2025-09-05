@@ -390,17 +390,21 @@ class BidiComponentRegistry:
             # Get the existing definition to preserve fields that aren't being updated
             existing_def = self._components.get(component_name)
 
-            # Merge new data with existing definition, preserving existing values for None fields
+            # Merge semantics:
+            # - If a key is present in updated_definition_data (even if None), use it.
+            # - If a key is missing, fall back to existing definition's value.
+            # This allows explicit removal by setting a property to None.
             merged_data = {
                 "name": updated_definition_data.get("name", component_name),
-                "html": updated_definition_data.get("html")
-                or (existing_def.html if existing_def else None),
-                "css": updated_definition_data.get("css")
-                if updated_definition_data.get("css") is not None
-                else (existing_def.css if existing_def else None),
-                "js": updated_definition_data.get("js")
-                if updated_definition_data.get("js") is not None
-                else (existing_def.js if existing_def else None),
+                "html": updated_definition_data.get(
+                    "html", existing_def.html if existing_def else None
+                ),
+                "css": updated_definition_data.get(
+                    "css", existing_def.css if existing_def else None
+                ),
+                "js": updated_definition_data.get(
+                    "js", existing_def.js if existing_def else None
+                ),
             }
 
             # Create new definition with merged data
