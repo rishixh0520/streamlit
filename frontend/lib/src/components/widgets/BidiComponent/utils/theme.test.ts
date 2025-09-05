@@ -81,6 +81,9 @@ describe("BidiComponent/utils/theme", () => {
       expect(result["--st-primary-color"]).toBe("#ff0000")
       expect(result["--st-background-color"]).toBe("#ffffff")
       expect(result["--st-font"]).toBe("Source Sans Pro, sans-serif")
+
+      // This is an optional property, so if it doesn't exist, it should not be included in the result
+      expect(Object.keys(result)).not.toContain("--st-widget-border-color")
     })
 
     it.each([

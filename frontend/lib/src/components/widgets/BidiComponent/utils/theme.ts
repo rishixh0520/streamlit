@@ -98,6 +98,8 @@ export const extractComponentsV2Theme = (
     borderColorLight: theme.colors.borderColorLight,
     codeTextColor: theme.colors.codeTextColor,
 
+    widgetBorderColor: theme.colors.widgetBorderColor,
+
     redColor: theme.colors.redColor,
     orangeColor: theme.colors.orangeColor,
     yellowColor: theme.colors.yellowColor,
