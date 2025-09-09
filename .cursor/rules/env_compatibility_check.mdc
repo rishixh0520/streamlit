@@ -1,0 +1,37 @@
+---
+description: Checks if a change may require manual validation in vNext/Community Cloud Environments
+globs:
+alwaysApply: false
+---
+
+If any answer is "yes," you must manually test in vNext + Community Cloud:
+
+1. Does the change introduce or modify Tornado routes, `server.baseUrlPath`, catch-alls, request methods, URL resolution, redirects, or status codes?
+2. Does it touch auth (OAuth/login/logout), cookies (`streamlit_user`, `streamlit_xsrf`), CSRF/XSRF handling, `server.trustedUserHeaders`, or session-to-identity binding?
+3. Does it affect the WebSocket handshake/subprotocols, session affinity/identity, reconnect behavior, ping/timeout, message size, or fragmentation?
+4. Does it alter embedding or the iframe boundary (host<->guest postMessage, sizing/resize behavior, sandbox/allow attributes, or permissions policy)?
+5. Does it change static asset handling or component asset serving (handlers, cache headers, size limits, base paths like `server.customComponentBaseUrlPath`, or proxying rules)?
+6. Does it modify the service worker, uploads, or downloads (registration/scope/cache strategy, upload/download endpoints, JWT/CSRF wrapping, or download attribute behavior)?
+7. Does it modify CORS allowlists, crossOrigin usage, external-origin fetches/External Networks, or backend URL discovery via `window.streamlit.*`?
+8. Does it introduce cross-origin theming assets or resource discovery changes (fonts/images/theme globals, CSS isolation with host, manifest/asset discovery when HTML isn't served by Tornado)?
+9. Does it rely on SiS/Snowflake runtime behavior (`running_in_sis()`, `get_active_session()`), Snowflake connection/session semantics, or SiS-specific environment variables/flags?
+10. Does it introduce or change client storage usage (cookies/localStorage/sessionStorage) that may differ in embedded/third-party contexts?
+11. Does it change security headers or policies (CSP, Referrer-Policy, Permissions-Policy) that impact embedding or resource loading?
+
+Treat these checks as examples; if in doubt about a feature, please test! Exemplary features in the past that would fall into this category were: custom theming in general (loading assets via a path), audio input (permissions on the iframe; file uploading), and st.pdf (resource embedding).
+
+How to run against the whole PR changeset (committed + uncommitted)
+
+- Always scope analysis to the exact set of files changed on this branch compared to its base, plus any staged, unstaged, and untracked files in the working tree. Use absolute paths.
+- In CI, prefer `origin/${GITHUB_BASE_REF}` as base; locally, default to `origin/develop`.
+
+Run from the repository root to print absolute changed paths (one per line):
+
+```bash
+bash ./scripts/list_changed_files.sh
+```
+
+Agent instructions
+
+- Use the printed absolute-path list as the complete scope for this rule.
+- If the list is empty, respond that no files changed; otherwise, review only those files for the checklist topics above.
