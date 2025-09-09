@@ -31,7 +31,17 @@ Run from the repository root to print absolute changed paths (one per line):
 bash ./scripts/list_changed_files.sh
 ```
 
+Change-aware mode (preferred)
+
+To avoid false positives, restrict analysis to only the added/modified line ranges of changed files. From the repository root:
+
+```bash
+bash ./scripts/changed_hunks_ndjson.sh
+```
+
+This emits one NDJSON object per file with the absolute path and the list of added line ranges. Agents should only analyze those ranges in each file.
+
 Agent instructions
 
-- Use the printed absolute-path list as the complete scope for this rule.
-- If the list is empty, respond that no files changed; otherwise, review only those files for the checklist topics above.
+- Prefer NDJSON hunk output when available and analyze only the specified ranges. If unavailable, fall back to the absolute file list and review only changed regions when possible.
+- If no changes are found, respond that no files changed.
