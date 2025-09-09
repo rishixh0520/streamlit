@@ -25,21 +25,21 @@ How to run against the whole PR changeset (committed + uncommitted)
 - Always scope analysis to the exact set of files changed on this branch compared to its base, plus any staged, unstaged, and untracked files in the working tree. Use absolute paths.
 - In CI, prefer `origin/${GITHUB_BASE_REF}` as base; locally, default to `origin/develop`.
 
-Run from the repository root to print absolute changed paths (one per line):
-
-```bash
-bash ./scripts/list_changed_files.sh
-```
-
-Change-aware mode (preferred)
+Preferred: change-aware ranges
 
 To avoid false positives, restrict analysis to only the added/modified line ranges of changed files. From the repository root:
 
 ```bash
-bash ./scripts/changed_hunks_ndjson.sh
+bash ./scripts/collect_changed_ranges.sh
 ```
 
 This emits one NDJSON object per file with the absolute path and the list of added line ranges. Agents should only analyze those ranges in each file.
+
+Fallback: absolute changed paths (one per line)
+
+```bash
+bash ./scripts/collect_changed_ranges.sh --paths-only
+```
 
 Agent instructions
 

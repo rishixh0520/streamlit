@@ -16,20 +16,24 @@
 
 set -euo pipefail
 
-# Emits NDJSON with changed line ranges per changed file since base, including staged, unstaged, and untracked.
-# Output format (one line per file with at least one added/modified line):
-# {"path":"/abs/path","ranges":[{"start":N,"end":M},{...}]}
-
 repo_root=$(git rev-parse --show-toplevel)
 base_remote="${GITHUB_BASE_REF:-develop}"
 
 # Best-effort fetch of the base ref
 git fetch origin "$base_remote" --depth=1 >/dev/null 2>&1 || true
 
-# Helper to emit NDJSON for a tracked file using diff vs compare_ref
+# Optional mode: print absolute changed paths only (one per line)
+if [ "${1-}" = "--paths-only" ]; then
+  {
+    git diff --name-only "origin/${base_remote}"...HEAD || true
+    git diff --name-only --cached || true
+    git diff --name-only || true
+    git ls-files --others --exclude-standard || true
+  } | sort -u | awk -v root="$repo_root" 'NF{ printf "%s/%s\n", root, $0 }'
+  exit 0
+fi
+
 emit_hunks_from_diff() {
-  # Read a unified diff from stdin and emit one NDJSON object per file with added ranges.
-  # Compatible with macOS awk: parse fields instead of regex capture.
   awk -v repo_root="$repo_root" '
     function print_obj() {
       if (count > 0 && path != "") {
@@ -43,48 +47,28 @@ emit_hunks_from_diff() {
     }
     BEGIN { path=""; count=0 }
     /^\+\+\+ / {
-      # Example: +++ b/path or +++ /dev/null
       newfile=$2
-      if (newfile == "/dev/null") {
-        next
-      }
-      # Strip leading a/ or b/
-      sub(/^a\//, "", newfile)
-      sub(/^b\//, "", newfile)
-      # If switching files, print previous
-      if (path != "" && newfile != path) {
-        print_obj()
-        count=0
-      }
-      path=newfile
-      next
+      if (newfile == "/dev/null") { next }
+      sub(/^a\//, "", newfile); sub(/^b\//, "", newfile)
+      if (path != "" && newfile != path) { print_obj(); count=0 }
+      path=newfile; next
     }
     /^@@ / {
-      # Example: @@ -a,b +c,d @@
-      # Field 3 is +c,d. Remove leading + and split by comma.
-      newhunk=$3
-      sub(/^\+/, "", newhunk)
+      newhunk=$3; sub(/^\+/, "", newhunk)
       n = split(newhunk, parts, ",")
       start = parts[1] + 0
       len = (n >= 2 ? parts[2] + 0 : 1)
-      if (len > 0 && path != "") {
-        end = start + len - 1
-        starts[count] = start
-        ends[count] = end
-        count++
-      }
+      if (len > 0 && path != "") { end = start + len - 1; starts[count]=start; ends[count]=end; count++ }
       next
     }
     END { print_obj() }
   '
 }
 
-# Helper to emit NDJSON for an untracked file (entire file is a single added range)
 emit_untracked() {
   local f="$1"
   local abs="$repo_root/$f"
   if [ -f "$abs" ]; then
-    # wc output begins with spaces; use awk to get the first field
     lines=$(wc -l < "$abs" | awk '{print $1}')
     if [ "$lines" -gt 0 ]; then
       printf '{"path":"%s","ranges":[{"start":1,"end":%d}]}' "$abs" "$lines"
@@ -93,7 +77,6 @@ emit_untracked() {
   fi
 }
 
-# Determine untracked set once
 # 1) Committed changes vs merge-base with origin/${base_remote}
 git diff --no-color -U0 "origin/${base_remote}"...HEAD | emit_hunks_from_diff || true
 
