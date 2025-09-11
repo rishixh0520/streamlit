@@ -107,18 +107,16 @@ def test_process_single_package_valid_manifest() -> None:
     )
     mock_dist.metadata.get.return_value = "test-package"
 
-    # Mock valid Streamlit config
     with (
         patch("builtins.open", mock_open()),
         patch("streamlit.components.v2.manifest_scanner.toml.load") as mock_toml_load,
         patch("streamlit.components.v2.manifest_scanner.Path") as mock_path,
     ):
         mock_toml_load.return_value = {
+            "project": {"name": "test-package", "version": "1.0.0"},
             "tool": {
                 "streamlit": {
                     "component": {
-                        "name": "test_component",
-                        "version": "1.0.0",
                         "components": [
                             {
                                 "name": "slider",
@@ -129,7 +127,7 @@ def test_process_single_package_valid_manifest() -> None:
                         "security": {"network_access": True},
                     }
                 }
-            }
+            },
         }
 
         # Mock Path behavior
@@ -141,7 +139,7 @@ def test_process_single_package_valid_manifest() -> None:
 
         assert result is not None
         manifest, package_root = result
-        assert manifest.name == "test_component"
+        assert manifest.name == "test-package"
         assert manifest.version == "1.0.0"
         assert len(manifest.components) == 1
         assert manifest.components[0]["name"] == "slider"
@@ -371,9 +369,6 @@ def test_validate_pyproject_for_package_project_name_match() -> None:
 [project]
 name = "test-package"
 
-[tool.streamlit.component]
-name = "test_component"
-version = "1.0.0"
         """
 
         pyproject_path.write_text(pyproject_content.strip())
@@ -398,16 +393,15 @@ def test_validate_pyproject_for_package_streamlit_component_fallback() -> None:
 
     with tempfile.TemporaryDirectory() as temp_dir:
         pyproject_path = Path(temp_dir) / "pyproject.toml"
-        # No project name, but has streamlit component config
+        # No project name, but presence of tool.streamlit.component still accepted
         pyproject_content = """
 [tool.streamlit.component]
-name = "test_component"
-version = "1.0.0"
+components = []
         """
 
         pyproject_path.write_text(pyproject_content.strip())
 
-        # Should match due to streamlit component presence
+        # Should match due to streamlit component presence (heuristic)
         assert _validate_pyproject_for_package(
             pyproject_path, "test-package", "test_package"
         )
@@ -460,10 +454,6 @@ def test_validate_pyproject_for_package_uses_package_name() -> None:
         pyproject_content = """
 [project]
 name = "my_component"
-
-[tool.streamlit.component]
-name = "my_component"
-version = "1.0.0"
         """
 
         pyproject_path.write_text(pyproject_content.strip())
@@ -856,11 +846,10 @@ def test_process_single_package_editable_install_success() -> None:
     mock_dist.metadata.get.return_value = "my-awesome-component"
 
     pyproject_content = {
+        "project": {"name": "my-awesome-component", "version": "2.0.0"},
         "tool": {
             "streamlit": {
                 "component": {
-                    "name": "awesome_component",
-                    "version": "2.0.0",
                     "components": [
                         {
                             "name": "slider",
@@ -871,7 +860,7 @@ def test_process_single_package_editable_install_success() -> None:
                     "security": {"network_access": False},
                 }
             }
-        }
+        },
     }
 
     with (
@@ -902,7 +891,7 @@ def test_process_single_package_editable_install_success() -> None:
 
         assert result is not None
         manifest, package_root = result
-        assert manifest.name == "awesome_component"
+        assert manifest.name == "my-awesome-component"
         assert manifest.version == "2.0.0"
         assert len(manifest.components) == 1
         assert manifest.components[0]["name"] == "slider"
@@ -920,16 +909,15 @@ def test_process_single_package_editable_install_fallback_to_pyproject_parent() 
     mock_dist.metadata.get.return_value = "test-component"
 
     pyproject_content = {
+        "project": {"name": "test-component", "version": "1.0.0"},
         "tool": {
             "streamlit": {
                 "component": {
-                    "name": "test_component",
-                    "version": "1.0.0",
                     "components": [{"name": "widget"}],
                     "security": {},
                 }
             }
-        }
+        },
     }
 
     with (
@@ -957,7 +945,7 @@ def test_process_single_package_editable_install_fallback_to_pyproject_parent() 
 
         assert result is not None
         manifest, package_root = result
-        assert manifest.name == "test_component"
+        assert manifest.name == "test-component"
         assert package_root == Path(temp_dir)  # Should be pyproject.toml parent
 
 
@@ -971,16 +959,15 @@ def test_process_single_package_mixed_install_scenarios() -> None:
     mock_dist.metadata.get.return_value = "mixed-component"
 
     pyproject_content = {
+        "project": {"name": "mixed-component", "version": "1.5.0"},
         "tool": {
             "streamlit": {
                 "component": {
-                    "name": "mixed_component",
-                    "version": "1.5.0",
                     "components": [{"name": "chart"}],
                     "security": {"cors": True},
                 }
             }
-        }
+        },
     }
 
     with (
@@ -1011,6 +998,6 @@ def test_process_single_package_mixed_install_scenarios() -> None:
 
         assert result is not None
         manifest, package_root = result
-        assert manifest.name == "mixed_component"
+        assert manifest.name == "mixed-component"
         assert manifest.version == "1.5.0"
         assert package_root == package_dir

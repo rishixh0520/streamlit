@@ -296,6 +296,10 @@ def _process_single_package(
                 return None
 
             streamlit_config = pyproject_data["tool"]["streamlit"]["component"]
+            components = streamlit_config.get("components")
+            if not components:
+                # No components declared -> not a CCv2 package
+                return None
 
             # Store the package location for asset resolution
             # For installed packages, we need the actual package directory
@@ -328,10 +332,19 @@ def _process_single_package(
                 # Fallback to the directory containing pyproject.toml
                 package_root = pyproject_path.parent
 
+            # Derive base name and version from [project] or dist metadata
+            project_table = pyproject_data.get("project", {})
+            derived_name = project_table.get("name") or dist.metadata.get("Name", "")
+            derived_version = (
+                project_table.get("version")
+                or dist.metadata.get("Version", "")
+                or "0.0.0"
+            )
+
             manifest = ComponentManifest(
-                name=streamlit_config["name"],
-                version=streamlit_config["version"],
-                components=streamlit_config.get("components", []),
+                name=derived_name,
+                version=derived_version,
+                components=components,
                 security=streamlit_config.get("security", {}),
             )
 
