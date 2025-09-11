@@ -18,6 +18,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
 
+from streamlit.components.v2.component_manifest_handler import (
+    ComponentManifestHandler,
+)
 from streamlit.components.v2.manifest_scanner import ComponentManifest
 
 
@@ -144,6 +147,62 @@ def test_process_single_package_valid_manifest() -> None:
         assert len(manifest.components) == 1
         assert manifest.components[0]["name"] == "slider"
         assert manifest.security == {"network_access": True}
+
+
+def test_component_manifest_handler_stores_asset_dir() -> None:
+    """Test that ComponentManifestHandler parses and persists asset_dir per component."""
+    # Create a manifest with an asset_dir entry
+    manifest = ComponentManifest(
+        name="test-package",
+        version="1.0.0",
+        components=[
+            {
+                "name": "slider",
+                "asset_dir": "slider/assets",
+            }
+        ],
+        security={},
+    )
+
+    handler = ComponentManifestHandler()
+    # Create a real temp package root and asset_dir to satisfy existence check
+    import os
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        package_root = Path(temp_dir)
+        os.makedirs(package_root / "slider" / "assets")
+
+        handler.process_manifest(manifest, package_root)
+
+    # Fully qualified name
+    comp_full_name = "test-package.slider"
+    asset_root = handler.get_asset_root(comp_full_name)
+
+    assert asset_root is not None
+    assert asset_root == package_root / "slider/assets"
+
+
+def test_component_manifest_handler_get_asset_root_none_when_missing() -> None:
+    """Test that get_asset_root returns None when asset_dir is not provided."""
+    manifest = ComponentManifest(
+        name="test-package",
+        version="1.0.0",
+        components=[
+            {
+                "name": "slider",
+            }
+        ],
+        security={},
+    )
+
+    handler = ComponentManifestHandler()
+    package_root = Path("/pkg/root")
+
+    handler.process_manifest(manifest, package_root)
+
+    comp_full_name = "test-package.slider"
+    assert handler.get_asset_root(comp_full_name) is None
 
 
 def test_scan_component_manifests_performance() -> None:

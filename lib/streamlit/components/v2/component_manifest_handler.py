@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from streamlit.components.v2.component_path_utils import ComponentPathUtils
@@ -30,17 +29,6 @@ if TYPE_CHECKING:
 _LOGGER: Final = get_logger(__name__)
 
 
-@dataclass
-class ComponentGlobInfo:
-    """Information about a component's glob pattern for file watching."""
-
-    component_name: str
-    manifest: ComponentManifest
-    package_root: Path
-    js_pattern: str | None
-    css_pattern: str | None
-
-
 class ComponentManifestHandler:
     """Handles component registration from manifest files and related operations."""
 
@@ -48,8 +36,8 @@ class ComponentManifestHandler:
         # Component metadata from pyproject.toml
         self._metadata: MutableMapping[str, ComponentManifest] = {}
         self._security_requirements: MutableMapping[str, dict[str, Any]] = {}
-        # Glob information for file watching
-        self._glob_watchers: dict[str, ComponentGlobInfo] = {}
+        # Resolved asset roots keyed by fully-qualified component name
+        self._asset_roots: MutableMapping[str, Path] = {}
 
     def process_manifest(
         self, manifest: ComponentManifest, package_root: Path
@@ -78,23 +66,24 @@ class ComponentManifestHandler:
         for comp_config in manifest.components:
             comp_name = f"{base_name}.{comp_config['name']}"
 
-            # Track glob patterns for file watching in dev mode
-            js_pattern = comp_config.get("js")
-            css_pattern = comp_config.get("css")
+            # Parse and persist asset_dir if provided. This is the sandbox root
+            # for any files later referenced via the Python API.
+            asset_dir = comp_config.get("asset_dir")
+            if asset_dir:
+                # Validate security of the configured path string first
+                ComponentPathUtils.validate_path_security(asset_dir)
+                # Store absolute asset root path and validate existence
+                asset_root = package_root / asset_dir
+                if not asset_root.exists() or not asset_root.is_dir():
+                    raise StreamlitAPIException(
+                        f"Declared asset_dir '{asset_dir}' for component '{comp_name}' "
+                        f"does not exist or is not a directory under package root '{package_root}'."
+                    )
+                self._asset_roots[comp_name] = asset_root
 
-            # Store glob info for potential watching
-            if self._should_track_for_watching(js_pattern, css_pattern):
-                self._glob_watchers[comp_name] = ComponentGlobInfo(
-                    component_name=comp_name,
-                    manifest=manifest,
-                    package_root=package_root,
-                    js_pattern=js_pattern,
-                    css_pattern=css_pattern,
-                )
-
-            # Resolve file paths
-            js_path = self._resolve_component_path(js_pattern, package_root)
-            css_path = self._resolve_component_path(css_pattern, package_root)
+            # Ignore any manifest-provided js/css entries entirely.
+            js_path = None
+            css_path = None
             html = comp_config.get("html")
 
             # Create component definition data
@@ -110,60 +99,31 @@ class ComponentManifestHandler:
 
         return component_definitions
 
-    def get_glob_watchers(self) -> dict[str, ComponentGlobInfo]:
-        """Get all glob watcher information for file watching."""
-        return self._glob_watchers.copy()
+    def get_glob_watchers(self) -> dict[str, Any]:
+        """Return an empty mapping; manifest js/css watching is removed."""
+        return {}
 
     def get_metadata(self, component_name: str) -> ComponentManifest | None:
         """Get metadata for a specific component."""
         return self._metadata.get(component_name)
 
-    def get_security_requirements(self, base_name: str) -> dict[str, Any] | None:
-        """Get security requirements for a component package."""
-        return self._security_requirements.get(base_name)
-
-    def _should_track_for_watching(
-        self, js_pattern: str | None, css_pattern: str | None
-    ) -> bool:
-        """Check if component should be tracked for file watching.
-
-        Returns True if either js_pattern or css_pattern exists (regardless
-        of whether they contain glob characters), as we want to watch both
-        glob patterns and direct file paths for changes.
-        """
-        return bool(js_pattern) or bool(css_pattern)
-
-    def _resolve_component_path(
-        self, pattern: str | None, package_root: Path
-    ) -> Path | None:
-        """Resolve a component path pattern to an actual path.
+    def get_asset_root(self, component_name: str) -> Path | None:
+        """Get the absolute asset root directory for a component if declared.
 
         Parameters
         ----------
-        pattern : str | None
-            The path pattern to resolve
-        package_root : Path
-            The package root directory
+        component_name : str
+            Fully-qualified component name (e.g. "package.component").
 
         Returns
         -------
         Path | None
-            The resolved path or None if no pattern provided
+            Absolute path to the component's asset root if present, otherwise None.
         """
-        if not pattern:
-            return None
+        return self._asset_roots.get(component_name)
 
-        if ComponentPathUtils.has_glob_characters(pattern):
-            try:
-                return ComponentPathUtils.resolve_glob_pattern(pattern, package_root)
-            except StreamlitAPIException:
-                _LOGGER.exception(
-                    "Failed to resolve pattern '%s' in package root %s",
-                    pattern,
-                    package_root,
-                )
-                raise
-        else:
-            # Simple path - check for security issues first
-            ComponentPathUtils.validate_path_security(pattern)
-            return package_root / pattern
+    def get_security_requirements(self, base_name: str) -> dict[str, Any] | None:
+        """Get security requirements for a component package."""
+        return self._security_requirements.get(base_name)
+
+    # Legacy helpers removed: manifest-based js/css resolution and tracking are no-ops.

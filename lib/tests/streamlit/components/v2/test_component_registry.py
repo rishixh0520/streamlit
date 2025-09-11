@@ -275,15 +275,18 @@ def test_get_component_path_nonexistent_component(temp_manager_setup) -> None:
 
 
 def test_register_from_manifest_basic(temp_manager_setup) -> None:
-    """Test basic manifest registration with single component."""
+    """Test basic manifest registration with single component.
+
+    Note: js/css entries in manifest are ignored in Solution 2.
+    """
     setup = temp_manager_setup
     # Create component files in package root
     package_root = Path(setup["temp_dir"].name)
-    js_file = package_root / "component.js"
-    css_file = package_root / "styles.css"
-
-    js_file.write_text("export default function() { console.log('basic test'); }")
-    css_file.write_text(".test { color: blue; }")
+    # Files may exist but are not read from manifest anymore
+    (package_root / "component.js").write_text(
+        "export default function() { console.log('basic test'); }"
+    )
+    (package_root / "styles.css").write_text(".test { color: blue; }")
 
     manifest = ComponentManifest(
         name="test_package",
@@ -291,8 +294,7 @@ def test_register_from_manifest_basic(temp_manager_setup) -> None:
         components=[
             {
                 "name": "basic_component",
-                "js": "component.js",
-                "css": "styles.css",
+                # js/css in manifest should be ignored
                 "html": "<div>Basic Component</div>",
             }
         ],
@@ -306,8 +308,9 @@ def test_register_from_manifest_basic(temp_manager_setup) -> None:
     assert component is not None
     assert component.name == "test_package.basic_component"
     assert component.html == "<div>Basic Component</div>"
-    assert component.js == js_file
-    assert component.css == css_file
+    # js/css must be None because manifest no longer provides entries
+    assert component.js is None
+    assert component.css is None
 
     # Check security requirements were stored
     assert setup["component_manager"].get_security_requirements("test_package") == {
@@ -322,19 +325,14 @@ def test_register_from_manifest_basic(temp_manager_setup) -> None:
 
 
 def test_register_from_manifest_multiple_components(temp_manager_setup) -> None:
-    """Test manifest registration with multiple components."""
+    """Test manifest registration with multiple components (js/css ignored)."""
     setup = temp_manager_setup
     package_root = Path(setup["temp_dir"].name)
 
-    # Create files for first component
-    comp1_js = package_root / "comp1.js"
-    comp1_css = package_root / "comp1.css"
-    comp1_js.write_text("console.log('component 1');")
-    comp1_css.write_text(".comp1 { background: red; }")
-
-    # Create files for second component
-    comp2_js = package_root / "comp2.js"
-    comp2_js.write_text("console.log('component 2');")
+    # Create files (not used by manifest anymore)
+    (package_root / "comp1.js").write_text("console.log('component 1');")
+    (package_root / "comp1.css").write_text(".comp1 { background: red; }")
+    (package_root / "comp2.js").write_text("console.log('component 2');")
 
     manifest = ComponentManifest(
         name="multi_package",
@@ -342,13 +340,11 @@ def test_register_from_manifest_multiple_components(temp_manager_setup) -> None:
         components=[
             {
                 "name": "component_one",
-                "js": "comp1.js",
-                "css": "comp1.css",
+                # js/css ignored
                 "html": "<div>Component One</div>",
             },
             {
                 "name": "component_two",
-                "js": "comp2.js",
                 "html": "<span>Component Two</span>",
             },
         ],
@@ -362,15 +358,15 @@ def test_register_from_manifest_multiple_components(temp_manager_setup) -> None:
     assert comp1 is not None
     assert comp1.name == "multi_package.component_one"
     assert comp1.html == "<div>Component One</div>"
-    assert comp1.js == comp1_js
-    assert comp1.css == comp1_css
+    assert comp1.js is None
+    assert comp1.css is None
 
     # Check second component was registered
     comp2 = setup["component_manager"].get("multi_package.component_two")
     assert comp2 is not None
     assert comp2.name == "multi_package.component_two"
     assert comp2.html == "<span>Component Two</span>"
-    assert comp2.js == comp2_js
+    assert comp2.js is None
     assert comp2.css is None
 
     # Check security requirements
@@ -421,30 +417,24 @@ def test_register_from_manifest_minimal_component(temp_manager_setup) -> None:
 
 
 def test_register_from_manifest_js_only_component(temp_manager_setup) -> None:
-    """Test manifest registration with JS-only component."""
+    """JS-only components in manifest are invalid and should raise."""
     setup = temp_manager_setup
     package_root = Path(setup["temp_dir"].name)
-    js_file = package_root / "standalone.js"
-    js_file.write_text(
+    (package_root / "standalone.js").write_text(
         "export default function() { document.body.innerHTML = 'JS Only'; }"
     )
 
     manifest = ComponentManifest(
         name="js_package",
         version="3.0.0",
-        components=[{"name": "js_component", "js": "standalone.js"}],
+        components=[{"name": "js_component"}],
         security={"csp_rules": {"script-src": "'self' 'unsafe-inline'"}},
     )
 
-    setup["component_manager"].register_from_manifest(manifest, package_root)
+    import pytest
 
-    # Check component was registered
-    component = setup["component_manager"].get("js_package.js_component")
-    assert component is not None
-    assert component.name == "js_package.js_component"
-    assert component.js == js_file
-    assert component.html is None
-    assert component.css is None
+    with pytest.raises(ValueError, match="must have at least one of html, css, or js"):
+        setup["component_manager"].register_from_manifest(manifest, package_root)
 
     # Check security requirements
     assert setup["component_manager"].get_security_requirements("js_package") == {
@@ -517,7 +507,8 @@ def test_register_from_manifest_complex_security(temp_manager_setup) -> None:
     assert component is not None
     assert component.name == "secure_package.secure_component"
     assert component.html == "<div id='secure'>Secure Component</div>"
-    assert component.js == js_file
+    # js from manifest is ignored
+    assert component.js is None
 
     # Check complex security requirements were stored
     expected_security = {
@@ -671,7 +662,7 @@ def test_register_from_manifest_thread_safety(temp_manager_setup) -> None:
 
 
 def test_register_from_manifest_glob_pattern_single_match(temp_manager_setup) -> None:
-    """Test manifest registration with glob pattern that matches exactly one file."""
+    """Glob patterns in manifest are ignored; js/css remain None."""
     setup = temp_manager_setup
     package_root = Path(setup["temp_dir"].name)
 
@@ -690,8 +681,6 @@ def test_register_from_manifest_glob_pattern_single_match(temp_manager_setup) ->
         components=[
             {
                 "name": "glob_component",
-                "js": "index-*.js",  # Glob pattern
-                "css": "styles-*.css",  # Glob pattern
                 "html": "<div>Glob component</div>",
             }
         ],
@@ -705,13 +694,13 @@ def test_register_from_manifest_glob_pattern_single_match(temp_manager_setup) ->
     assert component is not None
     assert component.name == "glob_package.glob_component"
     assert component.html == "<div>Glob component</div>"
-    # Files should be resolved to actual paths
-    assert str(component.js).endswith("index-abc123.js")
-    assert str(component.css).endswith("styles-def456.css")
+    # js/css are not sourced from manifest
+    assert component.js is None
+    assert component.css is None
 
 
 def test_register_from_manifest_glob_pattern_no_match() -> None:
-    """Test manifest registration with glob pattern that matches no files."""
+    """Manifest glob patterns are not supported; nothing to resolve."""
     with tempfile.TemporaryDirectory() as temp_dir:
         manager = BidiComponentManager()
         package_root = Path(temp_dir)
@@ -722,23 +711,21 @@ def test_register_from_manifest_glob_pattern_no_match() -> None:
             components=[
                 {
                     "name": "no_match_component",
-                    "js": "nonexistent-*.js",  # No files match this pattern
                     "html": "<div>Component</div>",
                 }
             ],
             security={},
         )
 
-        with pytest.raises(StreamlitAPIException) as exc_info:
-            manager.register_from_manifest(manifest, package_root)
-
-        error_msg = str(exc_info.value)
-        assert "No files found matching pattern 'nonexistent-*.js'" in error_msg
-        assert str(package_root) in error_msg
+        # Registration should succeed; js/css are ignored
+        manager.register_from_manifest(manifest, package_root)
+        comp = manager.get("no_match_package.no_match_component")
+        assert comp is not None
+        assert comp.js is None
 
 
 def test_register_from_manifest_glob_pattern_multiple_matches() -> None:
-    """Test manifest registration with glob pattern that matches multiple files."""
+    """Glob patterns are ignored; multiple matches are irrelevant."""
     with tempfile.TemporaryDirectory() as temp_dir:
         manager = BidiComponentManager()
         package_root = Path(temp_dir)
@@ -758,24 +745,21 @@ def test_register_from_manifest_glob_pattern_multiple_matches() -> None:
             components=[
                 {
                     "name": "multi_match_component",
-                    "js": "index-*.js",  # Multiple files match this pattern
                     "html": "<div>Component</div>",
                 }
             ],
             security={},
         )
 
-        with pytest.raises(StreamlitAPIException) as exc_info:
-            manager.register_from_manifest(manifest, package_root)
-
-        error_msg = str(exc_info.value)
-        assert "Multiple files found matching pattern 'index-*.js'" in error_msg
-        assert "Exactly one file must match the pattern" in error_msg
-        assert js_file1 in error_msg or js_file2 in error_msg
+        # Should register fine; js/css ignored
+        manager.register_from_manifest(manifest, package_root)
+        comp = manager.get("multi_match_package.multi_match_component")
+        assert comp is not None
+        assert comp.js is None
 
 
 def test_register_from_manifest_glob_pattern_path_traversal_attack() -> None:
-    """Test manifest registration rejects glob patterns with path traversal attempts."""
+    """Manifest paths are ignored; traversal attempts in js/css are irrelevant now."""
     with tempfile.TemporaryDirectory() as temp_dir:
         manager = BidiComponentManager()
         package_root = Path(temp_dir)
@@ -788,32 +772,25 @@ def test_register_from_manifest_glob_pattern_path_traversal_attack() -> None:
             "/absolute/path/script.js",
         ]
 
-        for pattern in malicious_patterns:
+        for _ in malicious_patterns:
             manifest = ComponentManifest(
                 name="malicious_package",
                 version="1.0.0",
                 components=[
                     {
                         "name": "malicious_component",
-                        "js": pattern,
                         "html": "<div>Component</div>",
                     }
                 ],
                 security={},
             )
 
-            with pytest.raises(StreamlitAPIException) as exc_info:
-                manager.register_from_manifest(manifest, package_root)
-
-            error_msg = str(exc_info.value)
-            assert (
-                "Path traversal attempts are not allowed" in error_msg
-                or "Absolute paths are not allowed" in error_msg
-            )
+            # Should register; js/css ignored
+            manager.register_from_manifest(manifest, package_root)
 
 
 def test_register_from_manifest_glob_pattern_outside_package_root() -> None:
-    """Test that glob patterns cannot access files outside package root."""
+    """Manifest js/css are ignored; outside paths via manifest not applicable."""
     with tempfile.TemporaryDirectory() as temp_dir:
         manager = BidiComponentManager()
 
@@ -844,15 +821,12 @@ def test_register_from_manifest_glob_pattern_outside_package_root() -> None:
             components=[
                 {
                     "name": "symlink_component",
-                    "js": "linked.js",  # This is a normal path, not a glob pattern
                     "html": "<div>Component</div>",
                 }
             ],
             security={},
         )
 
-        # This test should pass because symlinks within the package root are allowed
-        # The security is enforced by the package boundaries, not symlink traversal
         manager.register_from_manifest(manifest, package_root)
 
         component = manager.get("symlink_package.symlink_component")
@@ -861,7 +835,7 @@ def test_register_from_manifest_glob_pattern_outside_package_root() -> None:
 
 
 def test_register_from_manifest_normal_path_security() -> None:
-    """Test that normal paths reject path traversal attempts."""
+    """Manifest js/css are ignored; traversal attempts do not apply."""
     with tempfile.TemporaryDirectory() as temp_dir:
         manager = BidiComponentManager()
         package_root = Path(temp_dir)
@@ -880,18 +854,18 @@ def test_register_from_manifest_normal_path_security() -> None:
                 components=[
                     {
                         "name": "malicious_component",
-                        "js": pattern,  # Normal path with traversal attempt
+                        # js ignored
+                        "js": pattern,
                         "html": "<div>Component</div>",
                     }
                 ],
                 security={},
             )
 
-            with pytest.raises(StreamlitAPIException) as exc_info:
-                manager.register_from_manifest(manifest, package_root)
-
-            error_msg = str(exc_info.value)
-            assert "Path traversal attempts are not allowed" in error_msg
+            manager.register_from_manifest(manifest, package_root)
+            comp = manager.get("malicious_package.malicious_component")
+            assert comp is not None
+            assert comp.js is None
 
         # Test absolute paths
         manifest = ComponentManifest(
@@ -900,6 +874,7 @@ def test_register_from_manifest_normal_path_security() -> None:
             components=[
                 {
                     "name": "absolute_component",
+                    # js ignored
                     "js": "/absolute/path/script.js",
                     "html": "<div>Component</div>",
                 }
@@ -907,15 +882,14 @@ def test_register_from_manifest_normal_path_security() -> None:
             security={},
         )
 
-        with pytest.raises(StreamlitAPIException) as exc_info:
-            manager.register_from_manifest(manifest, package_root)
-
-        error_msg = str(exc_info.value)
-        assert "Absolute paths are not allowed" in error_msg
+        manager.register_from_manifest(manifest, package_root)
+        comp = manager.get("absolute_package.absolute_component")
+        assert comp is not None
+        assert comp.js is None
 
 
 def test_register_from_manifest_glob_pattern_mixed_normal_and_glob() -> None:
-    """Test manifest with mix of normal paths and glob patterns."""
+    """Manifest js/css ignored even if patterns are provided."""
     with tempfile.TemporaryDirectory() as temp_dir:
         manager = BidiComponentManager()
         package_root = Path(temp_dir)
@@ -935,8 +909,9 @@ def test_register_from_manifest_glob_pattern_mixed_normal_and_glob() -> None:
             components=[
                 {
                     "name": "mixed_component",
-                    "js": "normal.js",  # Normal path
-                    "css": "styles-*.css",  # Glob pattern
+                    # js/css ignored
+                    "js": "normal.js",
+                    "css": "styles-*.css",
                     "html": "<div>Mixed component</div>",
                 }
             ],
@@ -947,8 +922,8 @@ def test_register_from_manifest_glob_pattern_mixed_normal_and_glob() -> None:
 
         component = manager.get("mixed_package.mixed_component")
         assert component is not None
-        assert str(component.js.resolve()) == Path(normal_js).resolve().as_posix()
-        assert str(component.css.resolve()) == Path(hashed_css).resolve().as_posix()
+        assert component.js is None
+        assert component.css is None
         assert component.html == "<div>Mixed component</div>"
 
 
@@ -1089,7 +1064,7 @@ def test_glob_pattern_no_matches_error() -> None:
 @patch("streamlit.development.is_development_mode", True)
 @patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
 def test_file_watching_starts_in_dev_mode(mock_path_watcher_class) -> None:
-    """Test that file watching starts in development mode."""
+    """With manifest js/css removed, no watchers should be created from manifest."""
     mock_watcher_instance = MagicMock()
     mock_path_watcher_class.return_value.return_value = mock_watcher_instance
 
@@ -1104,7 +1079,7 @@ def test_file_watching_starts_in_dev_mode(mock_path_watcher_class) -> None:
         manifest = ComponentManifest(
             name="test_package",
             version="1.0.0",
-            components=[{"name": "test_component", "js": "*.js"}],
+            components=[{"name": "test_component", "js": "*.js", "html": "<div/>"}],
             security={},
         )
 
@@ -1115,11 +1090,9 @@ def test_file_watching_starts_in_dev_mode(mock_path_watcher_class) -> None:
         # Start file watching
         manager.start_file_watching()
 
-        # Check file watching was set up
-        assert manager.is_file_watching_started
-
-        # Check that the path watcher class was called to create a watcher
-        mock_path_watcher_class.return_value.assert_called()
+        # No watchers should be created from manifest-only data
+        assert not manager.is_file_watching_started
+        mock_path_watcher_class.return_value.assert_not_called()
 
 
 @patch("streamlit.development.is_development_mode", False)
@@ -1168,7 +1141,7 @@ def test_security_validation() -> None:
 
 
 def test_component_glob_info_tracking() -> None:
-    """Test that ComponentGlobInfo objects are created and tracked correctly."""
+    """Manifest js/css are ignored; no glob watchers are tracked."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
@@ -1187,7 +1160,12 @@ def test_component_glob_info_tracking() -> None:
             name="test_package",
             version="1.0.0",
             components=[
-                {"name": "test_component", "js": "*.js", "css": "styles/*.css"}
+                {
+                    "name": "test_component",
+                    "js": "*.js",
+                    "css": "styles/*.css",
+                    "html": "<div/>",
+                }
             ],
             security={},
         )
@@ -1200,22 +1178,9 @@ def test_component_glob_info_tracking() -> None:
         component = manager.get("test_package.test_component")
         assert component is not None
 
-        # Check glob watchers were created
+        # No glob watchers should be created
         glob_watchers = manager.get_glob_watchers()
-        assert len(glob_watchers) > 0
-
-        # Verify glob patterns are tracked
-        found_js_pattern = False
-        found_css_pattern = False
-
-        for watcher_info in glob_watchers.values():
-            if "*.js" in str(watcher_info):
-                found_js_pattern = True
-            if "styles/*.css" in str(watcher_info):
-                found_css_pattern = True
-
-        assert found_js_pattern, "JS glob pattern should be tracked"
-        assert found_css_pattern, "CSS glob pattern should be tracked"
+        assert len(glob_watchers) == 0
 
 
 @pytest.mark.parametrize(
