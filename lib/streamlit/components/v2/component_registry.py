@@ -97,11 +97,9 @@ class BidiComponentDefinition:
         object.__setattr__(self, "_is_js_path", is_js_path)
         object.__setattr__(self, "_source_paths", source_paths)
 
-        # Validate that at least one content type is provided
-        if not self.html and not self.js and not self.css:
-            raise ValueError(
-                "BidiComponentDefinition must have at least one of html, css, or js."
-            )
+        # Allow empty definitions to support manifest-registered components that
+        # declare only an asset sandbox (asset_dir) without inline or file-backed
+        # entry content. Runtime API calls can later provide js/css/html.
 
     def _is_file_path(self, content: str | Path | None) -> tuple[bool, str | None]:
         """Determine if the content is a file path.

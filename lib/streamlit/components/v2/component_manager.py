@@ -80,10 +80,24 @@ class BidiComponentManager:
         package_root : Path
             Root path of the package containing the components
         """
-        # Process manifest to get component definitions
+        # First process the manifest (persists security requirements & metadata)
         component_definitions = self._manifest_handler.process_manifest(
             manifest, package_root
         )
+
+        # Validate after processing so security metadata is stored even if invalid
+        # With js/css ignored in Solution 2, each component must declare at least
+        # one of HTML content or an asset_dir. If neither is present, raise.
+        for comp in manifest.components:
+            comp_full_name = f"{manifest.name}.{comp['name']}"
+            has_asset_root = (
+                self._manifest_handler.get_asset_root(comp_full_name) is not None
+            )
+            has_html = comp.get("html") is not None
+            if not has_asset_root and not has_html:
+                raise ValueError(
+                    "BidiComponentDefinition must have at least one of html, css, or js."
+                )
 
         # Register all component definitions
         self._registry.register_components_from_definitions(component_definitions)
@@ -144,6 +158,13 @@ class BidiComponentManager:
         str or None
             The component's source directory if found, otherwise None
         """
+        # Prefer manifest-declared asset_dir as the sandbox root when available.
+        # This ensures all file-serving is rooted at the package-declared assets directory.
+        asset_root = self._manifest_handler.get_asset_root(name)
+        if asset_root is not None:
+            return str(asset_root)
+
+        # Fallback to registry-provided source paths (inline-only scenarios/tests).
         return self._registry.get_component_path(name)
 
     def start_file_watching(self) -> None:
