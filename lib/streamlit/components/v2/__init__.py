@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import inspect
 import logging
+import os
+from pathlib import Path
 
 # Used at runtime for caller inspection - must be imported outside TYPE_CHECKING.
 from typing import TYPE_CHECKING, Any, Callable
 
+from streamlit.components.v2.component_path_utils import ComponentPathUtils
 from streamlit.components.v2.component_registry import BidiComponentDefinition
 from streamlit.components.v2.get_bidi_component_manager import (
     get_bidi_component_manager,
@@ -47,7 +50,7 @@ def _register_component(
 
     This shared function handles the component registration including frame
     inspection, key generation, and handling pre-registered components from
-    pyproject.toml.
+    ``pyproject.toml``.
 
     Parameters
     ----------
@@ -55,26 +58,29 @@ def _register_component(
         A short, descriptive identifier for the component.
     html : str or None
         Inline HTML markup for the component root.
-    css : str or None
-        Inline CSS or path to a ``.css`` file.
-    js : str or None
-        Inline JavaScript or path to a ``.js`` file.
+    css : str | None
+        Either inline CSS (string) or a string path/glob to a ``.css`` file.
+        When a path-like string is provided, the file MUST reside inside the
+        manifest-declared ``asset_dir`` for this component (configured in the
+        package's ``pyproject.toml``). Relative paths are resolved against the
+        caller's file location. Globs are allowed and must resolve to exactly one
+        file within ``asset_dir``. Attempts to reference files outside ``asset_dir``
+        (including traversal) will raise ``StreamlitAPIException``.
+    js : str | None
+        Either inline JavaScript (string) or a string path/glob to a ``.js`` file,
+        validated with the same rules as ``css``.
 
     Returns
     -------
     str
         The fully qualified component key in the form ``<module_name>.<n>``.
     """
-    # Defensive type checks
-    if css is not None and not isinstance(css, str):
-        raise StreamlitAPIException(
-            f"css parameter must be a string or None, got {type(css).__name__}. "
-        )
-
-    if js is not None and not isinstance(js, str):
-        raise StreamlitAPIException(
-            f"js parameter must be a string or None, got {type(js).__name__}. "
-        )
+    # Parameter type guards: only strings or None are supported for js/css
+    for _param_name, _param_value in (("css", css), ("js", js)):
+        if _param_value is not None and not isinstance(_param_value, str):
+            raise StreamlitAPIException(
+                f"{_param_name} must be a string or None. Pass a string path or glob."
+            )
 
     # Inspect the *call-site* to derive the caller's module and build a fully
     # qualified component key in the form ``<module_name>.<n>``. This mirrors
@@ -110,8 +116,12 @@ def _register_component(
             # Create a new definition using exactly the provided values. Fields
             # omitted by the caller are cleared (set to None) so properties can
             # be removed via subsequent registrations.
-            new_def = BidiComponentDefinition(
-                name=component_key,
+            # Determine the caller directory to resolve relative paths
+            caller_dir = os.path.dirname(inspect.getfile(user_caller_frame))
+            new_def = _build_definition_with_validation(
+                manager=registry,
+                component_key=component_key,
+                caller_dir=caller_dir,
                 html=html,
                 css=css,
                 js=js,
@@ -122,9 +132,12 @@ def _register_component(
             )
     else:
         # Normal registration for non-manifest components
+        caller_dir = os.path.dirname(inspect.getfile(user_caller_frame))
         registry.register(
-            BidiComponentDefinition(
-                name=component_key,
+            _build_definition_with_validation(
+                manager=registry,
+                component_key=component_key,
+                caller_dir=caller_dir,
                 html=html,
                 css=css,
                 js=js,
@@ -132,6 +145,89 @@ def _register_component(
         )
 
     return component_key
+
+
+def _build_definition_with_validation(
+    *,
+    manager: Any,
+    component_key: str,
+    caller_dir: str,
+    html: str | None,
+    css: str | None,
+    js: str | None,
+) -> BidiComponentDefinition:
+    """Construct definition and validate js/css inputs against ``asset_dir``.
+
+    Behavior
+    --------
+    - Inline strings are treated as content (no manifest required).
+    - Path-like strings require the component to be declared in the package
+      manifest with an ``asset_dir``.
+    - Globs are supported only within ``asset_dir`` and must resolve to exactly one
+      file; otherwise an exception is raised.
+    - Relative paths are resolved against the user's calling file and must end up
+      within ``asset_dir`` after resolution; traversal outside will raise.
+    - For file-backed entries, the URL sent to the frontend is the path relative to
+      ``asset_dir`` so the server can serve it under
+      ``/bidi-components/<component>/<relative_path>``.
+    """
+    asset_root = manager.manifest_handler.get_asset_root(component_key)
+    # Fallback: use manager.get_component_path which prefers manifest asset_dir
+    if asset_root is None:
+        try:
+            maybe_path = manager.get_component_path(component_key)
+        except Exception:
+            maybe_path = None
+        if maybe_path:
+            asset_root = Path(maybe_path)
+
+    def _resolve_entry(
+        value: str | None, *, kind: str
+    ) -> tuple[str | None, str | None]:
+        # Inline content: None rel URL
+        if value is None:
+            return None, None
+        if ComponentPathUtils.looks_like_inline_content(value):
+            return value, None
+
+        # For path-like strings, asset_root must exist
+        if asset_root is None:
+            raise StreamlitAPIException(
+                f"Component '{component_key}' must be declared in pyproject.toml with asset_dir "
+                f"to use file-backed {kind}."
+            )
+
+        value_str = value
+
+        # If looks like a glob, resolve strictly inside asset_root
+        if ComponentPathUtils.has_glob_characters(value_str):
+            resolved = ComponentPathUtils.resolve_glob_pattern(value_str, asset_root)
+            ComponentPathUtils.ensure_within_root(resolved, asset_root, kind=kind)
+            rel_url = str(resolved.relative_to(asset_root).as_posix())
+            return str(resolved), rel_url
+
+        # Concrete path: resolve relative to caller for non-absolute string/Path
+        p = Path(value_str)
+        candidate = p if p.is_absolute() else (Path(caller_dir) / p)
+
+        # Normalize and ensure it's within asset_root
+        ComponentPathUtils.ensure_within_root(candidate, asset_root, kind=kind)
+        resolved_candidate = candidate.resolve()
+        rel_url = str(resolved_candidate.relative_to(asset_root.resolve()).as_posix())
+        return str(resolved_candidate), rel_url
+
+    css_value, css_rel = _resolve_entry(css, kind="css")
+    js_value, js_rel = _resolve_entry(js, kind="js")
+
+    # Build definition with possible asset_dir-relative paths
+    return BidiComponentDefinition(
+        name=component_key,
+        html=html,
+        css=css_value,
+        js=js_value,
+        css_asset_relative_path=css_rel,
+        js_asset_relative_path=js_rel,
+    )
 
 
 def _create_component_callable(
@@ -143,19 +239,18 @@ def _create_component_callable(
 ) -> Callable[..., Any]:
     """Create a component callable, handling both lookup and registration cases.
 
-    This shared function handles the common logic including pre-registered
-    component lookup and runtime registration.
-
     Parameters
     ----------
     name : str
         A short, descriptive identifier for the component.
-    html : str or None
+    html : str | None
         Inline HTML markup for the component root.
-    css : str or None
-        Inline CSS or path to a ``.css`` file.
-    js : str or None
-        Inline JavaScript or path to a ``.js`` file.
+    css : str | None
+        Inline CSS (string) or a string path/glob to a file under ``asset_dir``;
+        see :func:`_register_component` for path validation semantics.
+    js : str | None
+        Inline JavaScript (string) or a string path/glob to a file under
+        ``asset_dir``; see :func:`_register_component` for path validation semantics.
 
     Returns
     -------
@@ -163,17 +258,6 @@ def _create_component_callable(
         A function that, when called inside a Streamlit script, mounts the
         component and returns its state.
     """
-    # Defensive type checks
-    if css is not None and not isinstance(css, str):
-        raise StreamlitAPIException(
-            f"css parameter must be a string or None, got {type(css).__name__}. "
-        )
-
-    if js is not None and not isinstance(js, str):
-        raise StreamlitAPIException(
-            f"js parameter must be a string or None, got {type(js).__name__}. "
-        )
-
     # Check if this is a lookup for a pre-registered component from `pyproject.toml`.
     if html is None and css is None and js is None:
         # Look up component in registry by fully qualified name
@@ -295,12 +379,16 @@ def component(
     ----------
     name : str
         A short, descriptive identifier for the component.
-    html : str or None
+    html : str | None
         Inline HTML markup for the component root.
-    css : str or None
-        Inline CSS or path to a ``.css`` file.
-    js : str or None
-        Inline JavaScript or path to a ``.js`` file.
+    css : str | None
+        Inline CSS (string) or a string path/glob to a ``.css`` file under
+        the component's manifest-declared ``asset_dir``. Relative paths are
+        resolved against the caller file; globs must match exactly one file.
+        Attempts to reference files outside ``asset_dir`` will raise.
+    js : str | None
+        Inline JavaScript (string) or a string path/glob to a ``.js`` file
+        under ``asset_dir`` with the same validation rules as ``css``.
 
     Returns
     -------

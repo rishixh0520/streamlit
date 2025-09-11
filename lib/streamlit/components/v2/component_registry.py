@@ -18,7 +18,6 @@ import inspect
 import os
 import threading
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from streamlit.logger import get_logger
@@ -65,20 +64,29 @@ class BidiComponentDefinition:
         A short, descriptive name for the component.
     html : str or None
         HTML content as a string.
-    css : str, Path, or None
-        CSS content as a string, or a path to a CSS file.
-    js : str, Path, or None
-        JavaScript content as a string, or a path to a JS file.
+    css : str or None
+        Either inline CSS content (string) or an absolute on-disk path string to a
+        ``.css`` file (resolved upstream by the public API). When file-backed, the
+        served URL path is provided via :pyattr:`css_asset_relative_path`.
+    js : str or None
+        Either inline JavaScript content (string) or an absolute on-disk path string
+        to a ``.js`` file (resolved upstream by the public API). When file-backed,
+        the served URL path is provided via :pyattr:`js_asset_relative_path`.
     """
 
     name: str
     html: str | None = None
-    css: str | Path | None = None
-    js: str | Path | None = None
+    css: str | None = None
+    js: str | None = None
     # Store processed content and metadata
     _is_css_path: bool = field(default=False, init=False, repr=False)
     _is_js_path: bool = field(default=False, init=False, repr=False)
     _source_paths: dict[str, str] = field(default_factory=dict, init=False, repr=False)
+    # Asset-dir-relative paths used for frontend loading. These represent the
+    # URL path segment under the component's declared asset_dir (e.g. "build/index.js")
+    # and are independent of the on-disk absolute file path stored in css/js.
+    css_asset_relative_path: str | None = None
+    js_asset_relative_path: str | None = None
 
     def __post_init__(self) -> None:
         # Keep track of source paths for content loaded from files
@@ -101,7 +109,7 @@ class BidiComponentDefinition:
         # declare only an asset sandbox (asset_dir) without inline or file-backed
         # entry content. Runtime API calls can later provide js/css/html.
 
-    def _is_file_path(self, content: str | Path | None) -> tuple[bool, str | None]:
+    def _is_file_path(self, content: str | None) -> tuple[bool, str | None]:
         """Determine if the content is a file path.
 
         Returns
@@ -113,26 +121,7 @@ class BidiComponentDefinition:
         if content is None:
             return False, None
 
-        if isinstance(content, Path):
-            content_str = str(content)
-            # Path objects are always treated as file paths
-            try:
-                if os.path.isabs(content_str):
-                    abs_path = content_str
-                else:
-                    # Relative path, make it relative to the caller's file
-                    caller_dir = os.path.dirname(_get_caller_path())
-                    abs_path = os.path.abspath(os.path.join(caller_dir, content_str))
-
-                if not os.path.exists(abs_path):
-                    raise ValueError(f"File does not exist: {abs_path}")  # noqa: TRY301
-
-                return True, abs_path
-            except Exception:
-                _LOGGER.exception("Failed to process file path %s", content_str)
-                raise
-
-        # For strings, we need to determine if it's a file path or content
+        # Determine if it's a file path or inline content for strings
         if isinstance(content, str):
             # Criteria for being treated as a path:
             # 1. Starts with ./, /, \ or contains path separators
@@ -171,32 +160,34 @@ class BidiComponentDefinition:
 
     @property
     def css_url(self) -> str | None:
-        """Return the URL to the CSS file if it's a path, otherwise None."""
+        """Return the asset_dir-relative URL path to the CSS file if file-backed.
+
+        When present, this is the value used to construct
+        ``/bidi-components/<component>/<css_url>`` on the server.
+        """
         if not self._is_css_path:
             return None
-
-        # If it's a path, get the filename
-        if isinstance(self.css, Path):
-            filename = self.css.name
-        else:
-            # It's a string path
-            filename = os.path.basename(str(self.css))
-
+        # Prefer explicit URL override if provided (relative to asset_dir)
+        if self.css_asset_relative_path:
+            return self.css_asset_relative_path
+        # Fallback to filename derived from provided path
+        filename = os.path.basename(str(self.css))
         return f"{filename}"
 
     @property
     def js_url(self) -> str | None:
-        """Return the URL to the JS file if it's a path, otherwise None."""
+        """Return the asset_dir-relative URL path to the JS file if file-backed.
+
+        When present, this is the value used to construct
+        ``/bidi-components/<component>/<js_url>`` on the server.
+        """
         if not self._is_js_path:
             return None
-
-        # If it's a path, get the filename
-        if isinstance(self.js, Path):
-            filename = self.js.name
-        else:
-            # It's a string path
-            filename = os.path.basename(str(self.js))
-
+        # Prefer explicit URL override if provided (relative to asset_dir)
+        if self.js_asset_relative_path:
+            return self.js_asset_relative_path
+        # Fallback to filename derived from provided path
+        filename = os.path.basename(str(self.js))
         return f"{filename}"
 
     @property
@@ -276,9 +267,9 @@ class BidiComponentRegistry:
         is already registered, it will be overwritten, and a warning is logged.
 
         For css and js parameters, the following formats are supported:
-        - A string with the actual content
-        - An absolute file path (string or Path)
-        - A relative file path (string or Path, relative to the caller)
+        - A string with the actual inline content
+        - An absolute file path (string)
+        - A relative file path (string, relative to the caller)
 
         Parameters
         ----------

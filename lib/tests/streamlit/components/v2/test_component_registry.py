@@ -161,55 +161,27 @@ def test_mixed_content(temp_test_files) -> None:
 
 
 def test_public_api_path_object_rejection() -> None:
-    """Test that public API functions reject Path objects with clear error messages."""
+    """Path inputs are rejected; only string paths/globs are supported (Phase 3.5)."""
     from pathlib import Path
 
-    # Test component() function with js parameter
     with pytest.raises(StreamlitAPIException) as exc_info:
         component("test", js=Path("test.js"))
+    msg = str(exc_info.value)
+    assert "string or None" in msg
+    assert "string path or glob" in msg
 
-    error_msg = str(exc_info.value)
-    assert "js parameter must be a string or None" in error_msg
-    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
-
-    # Test component() function with css parameter
     with pytest.raises(StreamlitAPIException) as exc_info:
         component("test", css=Path("test.css"))
+    msg = str(exc_info.value)
+    assert "string or None" in msg
+    assert "string path or glob" in msg
 
-    error_msg = str(exc_info.value)
-    assert "css parameter must be a string or None" in error_msg
-    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
+    # Still raise for other invalid types
+    with pytest.raises(StreamlitAPIException):
+        component("test", js=123)  # Integer instead of string/Path
 
-    # Test component() function with js parameter
-    with pytest.raises(StreamlitAPIException) as exc_info:
-        component("test", js=Path("test.js"))
-
-    error_msg = str(exc_info.value)
-    assert "js parameter must be a string or None" in error_msg
-    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
-
-    # Test component_dg() function with css parameter
-    with pytest.raises(StreamlitAPIException) as exc_info:
-        component("test", css=Path("test.css"))
-
-    error_msg = str(exc_info.value)
-    assert "css parameter must be a string or None" in error_msg
-    assert "got PosixPath" in error_msg or "got WindowsPath" in error_msg
-
-    # Test with other invalid types (not just Path)
-    with pytest.raises(StreamlitAPIException) as exc_info:
-        component("test", js=123)  # Integer instead of string
-
-    error_msg = str(exc_info.value)
-    assert "js parameter must be a string or None" in error_msg
-    assert "got int" in error_msg
-
-    with pytest.raises(StreamlitAPIException) as exc_info:
-        component("test", css=["invalid", "list"])  # List instead of string
-
-    error_msg = str(exc_info.value)
-    assert "css parameter must be a string or None" in error_msg
-    assert "got list" in error_msg
+    with pytest.raises(StreamlitAPIException):
+        component("test", css=["invalid", "list"])  # List instead of string/Path
 
 
 def test_string_file_path(temp_test_files) -> None:
