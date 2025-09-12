@@ -18,14 +18,10 @@ import os
 import threading
 from typing import TYPE_CHECKING, Any, Callable, Final
 
-from streamlit.components.v2.component_path_utils import ComponentPathUtils
-from streamlit.errors import StreamlitAPIException
 from streamlit.logger import get_logger
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from streamlit.components.v2.component_manifest_handler import ComponentGlobInfo
 
 
 _LOGGER: Final = get_logger(__name__)
@@ -40,16 +36,14 @@ def _get_is_development_mode() -> bool:
 class ComponentFileWatcher:
     """Handles file watching for component glob patterns in development mode."""
 
-    def __init__(
-        self, component_update_callback: Callable[[str, dict[str, Any]], None]
-    ) -> None:
+    def __init__(self, component_update_callback: Callable[[list[str]], None]) -> None:
         """Initialize the file watcher.
 
         Parameters
         ----------
-        component_update_callback : Callable[[str, dict[str, Any]], None]
-            Callback function to call when a component needs updating.
-            Signature: (component_name, updated_definition_data)
+        component_update_callback : Callable[[list[str]], None]
+            Callback function to call when components under watched roots change.
+            Signature: (affected_component_names)
         """
         self._component_update_callback = component_update_callback
         self._lock = threading.Lock()
@@ -61,8 +55,8 @@ class ComponentFileWatcher:
         self._path_watchers: list[Any] = []  # Store actual watcher instances
         self._watching_active = False
 
-        # Store glob watchers for re-resolution
-        self._glob_watchers: dict[str, ComponentGlobInfo] = {}
+        # Store asset roots to watch: component_name -> asset_root
+        self._asset_watch_roots: dict[str, Path] = {}
 
         # Default noisy directories to ignore in callbacks
         self._ignored_dirs: tuple[str, ...] = (
@@ -85,19 +79,19 @@ class ComponentFileWatcher:
         """
         return self._watching_active
 
-    def start_file_watching(self, glob_watchers: dict[str, ComponentGlobInfo]) -> None:
-        """Start file watching for glob patterns in development mode only.
+    def start_file_watching(self, asset_watch_roots: dict[str, Path]) -> None:
+        """Start file watching for asset roots in development mode only.
 
         Parameters
         ----------
-        glob_watchers : dict[str, ComponentGlobInfo]
-            Dictionary mapping component names to their glob information
+        asset_watch_roots : dict[str, Path]
+            Dictionary mapping component names to their asset root directories
         """
         if not _get_is_development_mode():
             _LOGGER.debug("File watching disabled: not in development mode")
             return
 
-        self._glob_watchers = glob_watchers.copy()
+        self._asset_watch_roots = asset_watch_roots.copy()
         self._start_file_watching()
 
     def stop_file_watching(self) -> None:
@@ -124,8 +118,8 @@ class ComponentFileWatcher:
             if self._watching_active or not _get_is_development_mode():
                 return
 
-            if not self._glob_watchers:
-                _LOGGER.debug("No patterns to watch")
+            if not self._asset_watch_roots:
+                _LOGGER.debug("No asset roots to watch")
                 return
 
             try:
@@ -135,8 +129,14 @@ class ComponentFileWatcher:
 
                 path_watcher_class = get_default_path_watcher_class()
 
-                # Collect patterns to watch (directory-only)
-                directories_to_watch = self._collect_patterns_to_watch()
+                # Collect directories to watch (dedupe)
+                directories_to_watch: dict[str, list[str]] = {}
+                for comp_name, root in self._asset_watch_roots.items():
+                    directory = str(root.resolve())
+                    if directory not in directories_to_watch:
+                        directories_to_watch[directory] = []
+                    if comp_name not in directories_to_watch[directory]:
+                        directories_to_watch[directory].append(comp_name)
 
                 # Setup watchers (directories only)
                 self._setup_directory_watchers(path_watcher_class, directories_to_watch)
@@ -151,75 +151,6 @@ class ComponentFileWatcher:
                 _LOGGER.warning("File watching not available: watchdog not installed")
             except Exception as e:
                 _LOGGER.warning("Failed to start file watching: %s", e)
-
-    def _collect_patterns_to_watch(self) -> dict[str, list[str]]:
-        """Collect patterns to watch and group them by directories.
-
-        Returns
-        -------
-        dict[str, list[str]]
-            A mapping of directories to lists of component names.
-        """
-        directories_to_watch: dict[str, list[str]] = {}
-
-        for comp_name, glob_info in self._glob_watchers.items():
-            # Process JS pattern
-            if glob_info.js_pattern:
-                self._process_pattern_for_watching(
-                    pattern=glob_info.js_pattern,
-                    package_root=glob_info.package_root,
-                    comp_name=comp_name,
-                    directories_to_watch=directories_to_watch,
-                )
-
-            # Process CSS pattern
-            if glob_info.css_pattern:
-                self._process_pattern_for_watching(
-                    pattern=glob_info.css_pattern,
-                    package_root=glob_info.package_root,
-                    comp_name=comp_name,
-                    directories_to_watch=directories_to_watch,
-                )
-        return directories_to_watch
-
-    def _process_pattern_for_watching(
-        self,
-        pattern: str,
-        package_root: Path,
-        comp_name: str,
-        directories_to_watch: dict[str, list[str]],
-    ) -> None:
-        """Process a single pattern and add it to the appropriate watching collection.
-
-        Parameters
-        ----------
-        pattern : str
-            The pattern to process (JS or CSS)
-        package_root : Path
-            The package root directory
-        comp_name : str
-            The component name
-        directories_to_watch : dict[str, list[str]]
-            Dictionary to collect directory watches
-
-        """
-        # Directory-only approach; no file watcher collection required.
-        if ComponentPathUtils.has_glob_characters(pattern):
-            # It's a glob pattern - watch the directory
-            search_path = package_root / pattern
-            directory = str(search_path.parent.resolve())
-            if directory not in directories_to_watch:
-                directories_to_watch[directory] = []
-            if comp_name not in directories_to_watch[directory]:
-                directories_to_watch[directory].append(comp_name)
-        else:
-            # It's a direct file path - only watch the parent directory recursively
-            resolved_file = (package_root / pattern).resolve()
-            directory = str(resolved_file.parent)
-            if directory not in directories_to_watch:
-                directories_to_watch[directory] = []
-            if comp_name not in directories_to_watch[directory]:
-                directories_to_watch[directory].append(comp_name)
 
     def _setup_directory_watchers(
         self, path_watcher_class: type, directories_to_watch: dict[str, list[str]]
@@ -283,27 +214,8 @@ class ComponentFileWatcher:
         if not _get_is_development_mode() or not self._watching_active:
             return
 
-        # Re-resolve patterns for affected components
-        updated_components = []
-        for comp_name in affected_components:
-            if comp_name not in self._glob_watchers:
-                continue
-
-            try:
-                updated_definition = self._re_resolve_component_patterns(comp_name)
-                if updated_definition:
-                    updated_components.append(comp_name)
-                    # Notify the registry about the update
-                    self._component_update_callback(comp_name, updated_definition)
-            except Exception:
-                _LOGGER.exception("Failed to re-resolve patterns for %s", comp_name)
-
-        # Log the update
-        if updated_components:
-            _LOGGER.info(
-                "Updated component definitions due to file changes: %s",
-                updated_components,
-            )
+        # Notify manager to handle re-resolution based on recorded API inputs
+        self._component_update_callback(affected_components)
 
     def _is_in_ignored_directory(self, changed_path: str) -> bool:
         """Return True if the changed path is inside an ignored directory.
@@ -319,143 +231,3 @@ class ComponentFileWatcher:
             return any(ignored in parts for ignored in self._ignored_dirs)
         except Exception:
             return False
-
-    def _re_resolve_component_patterns(self, comp_name: str) -> dict[str, Any] | None:
-        """Re-resolve patterns/paths for a component and return updated definition data.
-
-        This method handles both glob patterns and direct file paths.
-
-        Parameters
-        ----------
-        comp_name : str
-            The component name to re-resolve
-
-        Returns
-        -------
-        dict[str, Any] | None
-            Updated component definition data if patterns changed, None otherwise
-        """
-        glob_info = self._glob_watchers[comp_name]
-
-        # Resolve patterns
-        new_js = self._resolve_single_pattern(
-            pattern=glob_info.js_pattern,
-            package_root=glob_info.package_root,
-            comp_name=comp_name,
-            pattern_type="JS",
-        )
-
-        new_css = self._resolve_single_pattern(
-            pattern=glob_info.css_pattern,
-            package_root=glob_info.package_root,
-            comp_name=comp_name,
-            pattern_type="CSS",
-        )
-
-        # Check if anything was resolved
-        if new_js is not None or new_css is not None:
-            return {
-                "name": comp_name,
-                "js": new_js,
-                "css": new_css,
-                "html": self._extract_html_content(glob_info, comp_name),
-            }
-
-        return None
-
-    def _resolve_single_pattern(
-        self,
-        pattern: str | None,
-        package_root: Path,
-        comp_name: str,
-        pattern_type: str,
-    ) -> Path | None:
-        """Resolve a single pattern (JS or CSS) and return the resolved path.
-
-        Parameters
-        ----------
-        pattern : str | None
-            The pattern to resolve
-        package_root : Path
-            The package root directory
-        comp_name : str
-            The component name (for logging)
-        pattern_type : str
-            The type of pattern ("JS" or "CSS") for logging
-
-        Returns
-        -------
-        Path | None
-            The resolved path, or None if pattern doesn't exist or can't be resolved
-        """
-        if not pattern:
-            return None
-
-        try:
-            if ComponentPathUtils.has_glob_characters(pattern):
-                # It's a glob pattern
-                resolved_path = ComponentPathUtils.resolve_glob_pattern(
-                    pattern, package_root
-                )
-                _LOGGER.info(
-                    "Resolved %s file for %s: %s",
-                    pattern_type,
-                    comp_name,
-                    resolved_path,
-                )
-                return resolved_path
-            # It's a direct file path
-            ComponentPathUtils.validate_path_security(pattern)
-            resolved_path = package_root / pattern
-
-            # For direct file paths, only include if file exists
-            if resolved_path.exists():
-                _LOGGER.info(
-                    "Resolved %s file for %s: %s",
-                    pattern_type,
-                    comp_name,
-                    resolved_path,
-                )
-                return resolved_path
-            _LOGGER.debug(
-                "%s file '%s' doesn't exist for %s",
-                pattern_type,
-                resolved_path,
-                comp_name,
-            )
-            return None
-
-        except StreamlitAPIException:
-            # Pattern might not match any files anymore or file doesn't exist
-            _LOGGER.debug(
-                "%s pattern/path '%s' no longer matches files or doesn't exist for %s",
-                pattern_type,
-                pattern,
-                comp_name,
-            )
-            return None
-
-    def _extract_html_content(
-        self, glob_info: ComponentGlobInfo, comp_name: str
-    ) -> str | None:
-        """Extract HTML content from the component manifest.
-
-        Parameters
-        ----------
-        glob_info : ComponentGlobInfo
-            The component glob information
-        comp_name : str
-            The full component name
-
-        Returns
-        -------
-        str | None
-            The HTML content or None if not found
-        """
-        comp_base_name = comp_name.split(".")[
-            -1
-        ]  # Extract component name from full name
-        for comp_config in glob_info.manifest.components:
-            if comp_config.get("name") == comp_base_name:
-                return comp_config.get("html")
-        return None

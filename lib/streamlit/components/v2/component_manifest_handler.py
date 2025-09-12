@@ -122,6 +122,17 @@ class ComponentManifestHandler:
         """
         return self._asset_roots.get(component_name)
 
+    def get_asset_watch_roots(self) -> dict[str, Path]:
+        """Get a mapping of component names to their asset root directories.
+
+        Returns
+        -------
+        dict[str, Path]
+            A shallow copy mapping fully-qualified component names to absolute
+            asset root directories.
+        """
+        return dict(self._asset_roots)
+
     def get_security_requirements(self, base_name: str) -> dict[str, Any] | None:
         """Get security requirements for a component package."""
         return self._security_requirements.get(base_name)

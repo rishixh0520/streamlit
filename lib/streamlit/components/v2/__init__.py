@@ -17,13 +17,13 @@ from __future__ import annotations
 import inspect
 import logging
 import os
-from pathlib import Path
 
 # Used at runtime for caller inspection - must be imported outside TYPE_CHECKING.
 from typing import TYPE_CHECKING, Any, Callable
 
-from streamlit.components.v2.component_path_utils import ComponentPathUtils
-from streamlit.components.v2.component_registry import BidiComponentDefinition
+from streamlit.components.v2.component_definition_resolver import (
+    build_definition_with_validation,
+)
 from streamlit.components.v2.get_bidi_component_manager import (
     get_bidi_component_manager,
 )
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from types import FrameType
 
     from streamlit.components.v2.bidi_component import BidiComponentResult
+    from streamlit.components.v2.component_registry import BidiComponentDefinition
     from streamlit.elements.lib.layout_utils import Height, Width
     from streamlit.runtime.state.common import WidgetCallback
 
@@ -127,6 +128,8 @@ def _register_component(
                 js=js,
             )
             registry.register(new_def)
+            # Record API inputs for future re-resolution on file changes
+            registry.record_api_inputs(component_key, caller_dir, css, js)
             _LOGGER.debug(
                 "Runtime override for pre-registered component %s", component_key
             )
@@ -143,6 +146,8 @@ def _register_component(
                 js=js,
             )
         )
+        # Record API inputs for future re-resolution on file changes
+        registry.record_api_inputs(component_key, caller_dir, css, js)
 
     return component_key
 
@@ -156,77 +161,14 @@ def _build_definition_with_validation(
     css: str | None,
     js: str | None,
 ) -> BidiComponentDefinition:
-    """Construct definition and validate js/css inputs against ``asset_dir``.
-
-    Behavior
-    --------
-    - Inline strings are treated as content (no manifest required).
-    - Path-like strings require the component to be declared in the package
-      manifest with an ``asset_dir``.
-    - Globs are supported only within ``asset_dir`` and must resolve to exactly one
-      file; otherwise an exception is raised.
-    - Relative paths are resolved against the user's calling file and must end up
-      within ``asset_dir`` after resolution; traversal outside will raise.
-    - For file-backed entries, the URL sent to the frontend is the path relative to
-      ``asset_dir`` so the server can serve it under
-      ``/bidi-components/<component>/<relative_path>``.
-    """
-    asset_root = manager.manifest_handler.get_asset_root(component_key)
-    # Fallback: use manager.get_component_path which prefers manifest asset_dir
-    if asset_root is None:
-        try:
-            maybe_path = manager.get_component_path(component_key)
-        except Exception:
-            maybe_path = None
-        if maybe_path:
-            asset_root = Path(maybe_path)
-
-    def _resolve_entry(
-        value: str | None, *, kind: str
-    ) -> tuple[str | None, str | None]:
-        # Inline content: None rel URL
-        if value is None:
-            return None, None
-        if ComponentPathUtils.looks_like_inline_content(value):
-            return value, None
-
-        # For path-like strings, asset_root must exist
-        if asset_root is None:
-            raise StreamlitAPIException(
-                f"Component '{component_key}' must be declared in pyproject.toml with asset_dir "
-                f"to use file-backed {kind}."
-            )
-
-        value_str = value
-
-        # If looks like a glob, resolve strictly inside asset_root
-        if ComponentPathUtils.has_glob_characters(value_str):
-            resolved = ComponentPathUtils.resolve_glob_pattern(value_str, asset_root)
-            ComponentPathUtils.ensure_within_root(resolved, asset_root, kind=kind)
-            rel_url = str(resolved.relative_to(asset_root).as_posix())
-            return str(resolved), rel_url
-
-        # Concrete path: resolve relative to caller for non-absolute string/Path
-        p = Path(value_str)
-        candidate = p if p.is_absolute() else (Path(caller_dir) / p)
-
-        # Normalize and ensure it's within asset_root
-        ComponentPathUtils.ensure_within_root(candidate, asset_root, kind=kind)
-        resolved_candidate = candidate.resolve()
-        rel_url = str(resolved_candidate.relative_to(asset_root.resolve()).as_posix())
-        return str(resolved_candidate), rel_url
-
-    css_value, css_rel = _resolve_entry(css, kind="css")
-    js_value, js_rel = _resolve_entry(js, kind="js")
-
-    # Build definition with possible asset_dir-relative paths
-    return BidiComponentDefinition(
-        name=component_key,
+    # Delegate to shared resolver for consistent behavior
+    return build_definition_with_validation(
+        manager=manager,
+        component_key=component_key,
+        caller_dir=caller_dir,
         html=html,
-        css=css_value,
-        js=js_value,
-        css_asset_relative_path=css_rel,
-        js_asset_relative_path=js_rel,
+        css=css,
+        js=js,
     )
 
 

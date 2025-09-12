@@ -16,13 +16,11 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from streamlit.components.v2.component_file_watcher import ComponentFileWatcher
-from streamlit.components.v2.component_manifest_handler import ComponentGlobInfo
-from streamlit.components.v2.manifest_scanner import ComponentManifest
 
 
 @pytest.fixture
@@ -63,36 +61,6 @@ def temp_component_files():
 
 
 @pytest.fixture
-def mock_component_manifest():
-    """Create a mock component manifest."""
-    manifest = MagicMock(spec=ComponentManifest)
-    manifest.components = [
-        {
-            "name": "component",  # This should match the last part of "test.component"
-            "js": "js/component.js",
-            "css": "css/styles.css",
-            "html": "<div>Test Component</div>",
-        }
-    ]
-    return manifest
-
-
-@pytest.fixture
-def mock_glob_component_manifest():
-    """Create a mock component manifest with glob patterns."""
-    manifest = MagicMock(spec=ComponentManifest)
-    manifest.components = [
-        {
-            "name": "glob_component",  # This should match the last part of "test.glob_component"
-            "js": "js/component-*.js",
-            "css": "css/styles-*.css",
-            "html": "<div>Glob Component</div>",
-        }
-    ]
-    return manifest
-
-
-@pytest.fixture
 def mock_callback():
     """Create a mock callback function."""
     return Mock()
@@ -114,7 +82,7 @@ def test_init(mock_callback):
     # Directory-only: no file watcher state exists anymore
     assert not hasattr(watcher, "_watched_files") or watcher._watched_files == {}
     assert watcher._path_watchers == []
-    assert watcher._glob_watchers == {}
+    assert watcher._asset_watch_roots == {}
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
@@ -122,15 +90,15 @@ def test_start_file_watching_disabled_in_production(mock_dev_mode, file_watcher)
     """Test that file watching is disabled when not in development mode."""
     mock_dev_mode.return_value = False
 
-    glob_watchers = {"test.component": MagicMock()}
-    file_watcher.start_file_watching(glob_watchers)
+    asset_roots = {"test.component": Path("/tmp")}
+    file_watcher.start_file_watching(asset_roots)
 
     assert not file_watcher.is_watching_active
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
 def test_start_file_watching_no_watchers(mock_dev_mode, file_watcher):
-    """Test starting file watching with no glob watchers."""
+    """Test starting file watching with no asset roots."""
     mock_dev_mode.return_value = True
 
     file_watcher.start_file_watching({})
@@ -140,120 +108,76 @@ def test_start_file_watching_no_watchers(mock_dev_mode, file_watcher):
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
 @patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
-def test_start_file_watching_direct_file_paths(
+def test_start_file_watching_single_asset_root(
     mock_path_watcher_class,
     mock_dev_mode,
     file_watcher,
     temp_component_files,
-    mock_component_manifest,
 ):
-    """Test file watching for direct file paths (not glob patterns)."""
+    """Test file watching for a single asset root directory."""
     mock_dev_mode.return_value = True
     mock_watcher_instance = Mock()
     mock_path_watcher_class.return_value = Mock(return_value=mock_watcher_instance)
 
-    # Create ComponentGlobInfo for direct file paths
-    glob_info = ComponentGlobInfo(
-        component_name="test.component",
-        manifest=mock_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component.js",  # Direct path, no glob characters
-        css_pattern="css/styles.css",  # Direct path, no glob characters
-    )
-
-    glob_watchers = {"test.component": glob_info}
-    file_watcher.start_file_watching(glob_watchers)
+    asset_roots = {"test.component": temp_component_files["temp_dir"]}
+    file_watcher.start_file_watching(asset_roots)
 
     # Should be watching
     assert file_watcher.is_watching_active
+    assert len(file_watcher._path_watchers) == 1
+    assert len(file_watcher._watched_directories) == 1
 
-    # With directory-only approach: two parent directories (js, css)
+
+@patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
+@patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
+def test_start_file_watching_multiple_roots(
+    mock_path_watcher_class,
+    mock_dev_mode,
+    file_watcher,
+    temp_component_files,
+):
+    """Test file watching for multiple asset root directories."""
+    mock_dev_mode.return_value = True
+    mock_watcher_instance = Mock()
+    mock_path_watcher_class.return_value = Mock(return_value=mock_watcher_instance)
+
+    js_root = temp_component_files["temp_dir"] / "js"
+    css_root = temp_component_files["temp_dir"] / "css"
+
+    asset_roots = {
+        "test.js_component": js_root,
+        "test.css_component": css_root,
+    }
+    file_watcher.start_file_watching(asset_roots)
+
+    # Should be watching two distinct roots
+    assert file_watcher.is_watching_active
     assert len(file_watcher._path_watchers) == 2
     assert len(file_watcher._watched_directories) == 2
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
 @patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
-def test_start_file_watching_glob_patterns(
-    mock_path_watcher_class,
-    mock_dev_mode,
-    file_watcher,
-    temp_component_files,
-    mock_glob_component_manifest,
-):
-    """Test file watching for glob patterns."""
-    mock_dev_mode.return_value = True
-    mock_watcher_instance = Mock()
-    mock_path_watcher_class.return_value = Mock(return_value=mock_watcher_instance)
-
-    # Create ComponentGlobInfo for glob patterns
-    glob_info = ComponentGlobInfo(
-        component_name="test.glob_component",
-        manifest=mock_glob_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component-*.js",  # Glob pattern
-        css_pattern="css/styles-*.css",  # Glob pattern
-    )
-
-    glob_watchers = {"test.glob_component": glob_info}
-    file_watcher.start_file_watching(glob_watchers)
-
-    # Should be watching
-    assert file_watcher.is_watching_active
-
-    # Should have created watchers for directories
-    assert len(file_watcher._path_watchers) == 2  # JS and CSS directories
-    assert len(file_watcher._watched_directories) == 2
-    # No individual file watchers in directory-only approach
-
-
-@patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
-@patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
-def test_start_file_watching_mixed_patterns(
+def test_start_file_watching_shared_root(
     mock_path_watcher_class, mock_dev_mode, file_watcher, temp_component_files
 ):
-    """Test file watching with mixed glob patterns and direct file paths."""
+    """Test file watching with multiple components sharing the same asset root."""
     mock_dev_mode.return_value = True
     mock_watcher_instance = Mock()
     mock_path_watcher_class.return_value = Mock(return_value=mock_watcher_instance)
 
-    # Create mixed ComponentGlobInfo
-    direct_manifest = MagicMock()
-    direct_manifest.components = [{"name": "direct", "html": "<div>Direct</div>"}]
-
-    glob_manifest = MagicMock()
-    glob_manifest.components = [{"name": "glob", "html": "<div>Glob</div>"}]
-
-    direct_glob_info = ComponentGlobInfo(
-        component_name="test.direct",
-        manifest=direct_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component.js",  # Direct path
-        css_pattern=None,
-    )
-
-    glob_glob_info = ComponentGlobInfo(
-        component_name="test.glob",
-        manifest=glob_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern=None,
-        css_pattern="css/styles-*.css",  # Glob pattern
-    )
-
-    glob_watchers = {
-        "test.direct": direct_glob_info,
-        "test.glob": glob_glob_info,
+    root = temp_component_files["temp_dir"]
+    asset_roots = {
+        "test.direct": root,
+        "test.glob": root,
     }
-    file_watcher.start_file_watching(glob_watchers)
+    file_watcher.start_file_watching(asset_roots)
 
     # Should be watching
     assert file_watcher.is_watching_active
-
-    # Directory-only: two directories (parent js, css glob)
-    assert len(file_watcher._path_watchers) == 2
-    assert (
-        len(file_watcher._watched_directories) == 2
-    )  # parent(dir js) + css dir for glob
+    # Only one watcher because roots are the same
+    assert len(file_watcher._path_watchers) == 1
+    assert len(file_watcher._watched_directories) == 1
 
 
 def test_stop_file_watching(file_watcher):
@@ -296,193 +220,55 @@ def test_stop_file_watching_with_close_errors(file_watcher):
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
-def test_on_directory_changed(
-    mock_dev_mode, file_watcher, temp_component_files, mock_component_manifest
-):
+def test_on_directory_changed(mock_dev_mode, file_watcher, temp_component_files):
     """Test directory change event handling."""
     mock_dev_mode.return_value = True
     file_watcher._watching_active = True
 
-    # Create glob info and add to watchers
-    glob_info = ComponentGlobInfo(
-        component_name="test.component",
-        manifest=mock_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component-*.js",
-        css_pattern=None,
-    )
-    file_watcher._glob_watchers = {"test.component": glob_info}
+    # Trigger component change (simulating directory change)
+    file_watcher._handle_component_change(["test.component"])
 
-    with patch.object(file_watcher, "_re_resolve_component_patterns") as mock_resolve:
-        mock_resolve.return_value = {
-            "name": "test.component",
-            "js": temp_component_files["glob_js_file"],
-            "css": None,
-            "html": "<div>Test Component</div>",
-        }
-
-        # Trigger component change (simulating directory change)
-        file_watcher._handle_component_change(["test.component"])
-
-        # Should have called re-resolve
-        mock_resolve.assert_called_once_with("test.component")
-
-        # Should have called the update callback
-        file_watcher._component_update_callback.assert_called_once()
+    # Should have called the update callback with a list of components
+    file_watcher._component_update_callback.assert_called_once()
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
-def test_on_file_changed(
-    mock_dev_mode, file_watcher, temp_component_files, mock_component_manifest
-):
+def test_on_file_changed(mock_dev_mode, file_watcher, temp_component_files):
     """Test file change event handling."""
     mock_dev_mode.return_value = True
     file_watcher._watching_active = True
 
-    # Create glob info and add to watchers
-    glob_info = ComponentGlobInfo(
-        component_name="test.component",
-        manifest=mock_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component.js",  # Direct file path
-        css_pattern=None,
-    )
-    file_watcher._glob_watchers = {"test.component": glob_info}
-
-    with patch.object(file_watcher, "_re_resolve_component_patterns") as mock_resolve:
-        mock_resolve.return_value = {
-            "name": "test.component",
-            "js": temp_component_files["js_file"],
-            "css": None,
-            "html": "<div>Test Component</div>",
-        }
-
-        # Trigger component change (simulating file change)
-        file_watcher._handle_component_change(["test.component"])
-
-        # Should have called re-resolve
-        mock_resolve.assert_called_once_with("test.component")
-
-        # Should have called the update callback
-        file_watcher._component_update_callback.assert_called_once()
-
-
-def test_re_resolve_component_patterns_direct_file_path(
-    file_watcher, temp_component_files, mock_component_manifest
-):
-    """Test re-resolving direct file paths."""
-    # Create glob info for direct file paths
-    glob_info = ComponentGlobInfo(
-        component_name="test.component",
-        manifest=mock_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component.js",
-        css_pattern="css/styles.css",
-    )
-    file_watcher._glob_watchers = {"test.component": glob_info}
-
-    result = file_watcher._re_resolve_component_patterns("test.component")
-
-    assert result is not None
-    assert result["name"] == "test.component"
-    assert result["js"] == temp_component_files["temp_dir"] / "js/component.js"
-    assert result["css"] == temp_component_files["temp_dir"] / "css/styles.css"
-    assert result["html"] == "<div>Test Component</div>"
-
-
-def test_re_resolve_component_patterns_glob_patterns(
-    file_watcher, temp_component_files, mock_glob_component_manifest
-):
-    """Test re-resolving glob patterns."""
-    # Create glob info for glob patterns
-    glob_info = ComponentGlobInfo(
-        component_name="test.glob_component",
-        manifest=mock_glob_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component-*.js",
-        css_pattern="css/styles-*.css",
-    )
-    file_watcher._glob_watchers = {"test.glob_component": glob_info}
-
-    result = file_watcher._re_resolve_component_patterns("test.glob_component")
-
-    assert result is not None
-    assert result["name"] == "test.glob_component"
-    # Use resolve() to normalize the paths to handle symlinks
-    assert result["js"].resolve() == temp_component_files["glob_js_file"].resolve()
-    assert result["css"].resolve() == temp_component_files["glob_css_file"].resolve()
-    assert result["html"] == "<div>Glob Component</div>"
-
-
-def test_re_resolve_component_patterns_missing_files(
-    file_watcher, temp_component_files, mock_component_manifest
-):
-    """Test re-resolving when files don't exist."""
-    # Create glob info for non-existent files
-    glob_info = ComponentGlobInfo(
-        component_name="test.component",
-        manifest=mock_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/nonexistent.js",
-        css_pattern="css/nonexistent.css",
-    )
-    file_watcher._glob_watchers = {"test.component": glob_info}
-
-    result = file_watcher._re_resolve_component_patterns("test.component")
-
-    # Should return None when no files can be resolved
-    assert result is None
-
-
-def test_re_resolve_component_patterns_partial_resolution(
-    file_watcher, temp_component_files, mock_component_manifest
-):
-    """Test re-resolving when only some files exist."""
-    # Create glob info where only JS exists
-    glob_info = ComponentGlobInfo(
-        component_name="test.component",
-        manifest=mock_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component.js",  # Exists
-        css_pattern="css/nonexistent.css",  # Doesn't exist
-    )
-    file_watcher._glob_watchers = {"test.component": glob_info}
-
-    result = file_watcher._re_resolve_component_patterns("test.component")
-
-    assert result is not None
-    assert result["name"] == "test.component"
-    assert result["js"] == temp_component_files["temp_dir"] / "js/component.js"
-    assert result["css"] is None  # Should be None since the file doesn't exist
-    assert result["html"] == "<div>Test Component</div>"
-
-
-@patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
-def test_change_events_ignored_when_not_watching(mock_dev_mode, file_watcher):
-    """Test that change events are ignored when not in watching mode."""
-    mock_dev_mode.return_value = False
-    file_watcher._watching_active = False
-
-    # Should not call callback when not watching
+    # Trigger component change (simulating file change)
     file_watcher._handle_component_change(["test.component"])
 
-    file_watcher._component_update_callback.assert_not_called()
+    # Should have called the update callback
+    file_watcher._component_update_callback.assert_called_once()
+
+
+def test_no_re_resolve_helpers_present(file_watcher):
+    """Ensure legacy re-resolve helpers are removed in asset-root approach."""
+    assert not hasattr(file_watcher, "_re_resolve_component_patterns")
+
+
+def test_no_re_resolve_glob_present(file_watcher):
+    """Ensure single-pattern resolver helper has been removed."""
+    assert not hasattr(file_watcher, "_resolve_single_pattern")
+
+
+def test_no_extract_html_present(file_watcher):
+    """Ensure manifest HTML extraction helper has been removed."""
+    assert not hasattr(file_watcher, "_extract_html_content")
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
 @patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
-def test_glob_directory_watches_recursively(
+def test_directory_watches_recursively(
     mock_path_watcher_class,
     mock_dev_mode,
     file_watcher,
     temp_component_files,
-    mock_glob_component_manifest,
 ):
-    """Ensure directory watchers created for glob patterns use recursive "**/*" globs.
-
-    We expect the watcher to pass a recursive glob_pattern to include transitive
-    files in subdirectories, so changes in nested paths also trigger updates.
-    """
+    """Ensure directory watchers use recursive "**/*" globs for asset roots."""
     mock_dev_mode.return_value = True
 
     # Mock the watcher class constructor; we care about constructor call kwargs
@@ -490,17 +276,11 @@ def test_glob_directory_watches_recursively(
     watcher_class_mock = Mock(return_value=mock_watcher_instance)
     mock_path_watcher_class.return_value = watcher_class_mock
 
-    glob_info = ComponentGlobInfo(
-        component_name="test.glob_recursive",
-        manifest=mock_glob_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component-*.js",  # Glob pattern -> directory watch
-        css_pattern=None,
+    file_watcher.start_file_watching(
+        {"test.glob_recursive": temp_component_files["temp_dir"]}
     )
 
-    file_watcher.start_file_watching({"test.glob_recursive": glob_info})
-
-    # One directory watcher should have been created for the JS glob
+    # One directory watcher should have been created for the root
     assert watcher_class_mock.call_count == 1
 
     # Assert glob_pattern="**/*" for recursive watching
@@ -511,11 +291,7 @@ def test_glob_directory_watches_recursively(
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
 @patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
 def test_direct_file_also_watches_parent_directory_recursively(
-    mock_path_watcher_class,
-    mock_dev_mode,
-    file_watcher,
-    temp_component_files,
-    mock_component_manifest,
+    mock_path_watcher_class, mock_dev_mode, file_watcher, temp_component_files
 ):
     """Ensure direct file paths register a recursive parent directory watcher.
 
@@ -528,15 +304,9 @@ def test_direct_file_also_watches_parent_directory_recursively(
     watcher_class_mock = Mock(return_value=mock_watcher_instance)
     mock_path_watcher_class.return_value = watcher_class_mock
 
-    glob_info = ComponentGlobInfo(
-        component_name="test.direct_parent",
-        manifest=mock_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component.js",  # Direct file
-        css_pattern=None,
+    file_watcher.start_file_watching(
+        {"test.direct_parent": temp_component_files["temp_dir"]}
     )
-
-    file_watcher.start_file_watching({"test.direct_parent": glob_info})
 
     # Expect exactly one directory watcher (parent dir), recursive
     assert watcher_class_mock.call_count == 1
@@ -546,11 +316,7 @@ def test_direct_file_also_watches_parent_directory_recursively(
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")
 @patch("streamlit.watcher.path_watcher.get_default_path_watcher_class")
 def test_ignores_noisy_directories_in_callbacks(
-    mock_path_watcher_class,
-    mock_dev_mode,
-    file_watcher,
-    temp_component_files,
-    mock_glob_component_manifest,
+    mock_path_watcher_class, mock_dev_mode, file_watcher, temp_component_files
 ):
     """Ensure change events under noisy directories (e.g., node_modules) are ignored.
 
@@ -564,38 +330,22 @@ def test_ignores_noisy_directories_in_callbacks(
     watcher_class_mock = Mock(return_value=mock_watcher_instance)
     mock_path_watcher_class.return_value = watcher_class_mock
 
-    glob_info = ComponentGlobInfo(
-        component_name="test.glob_ignore",
-        manifest=mock_glob_component_manifest,
-        package_root=temp_component_files["temp_dir"],
-        js_pattern="js/component-*.js",
-        css_pattern=None,
+    file_watcher.start_file_watching(
+        {"test.glob_ignore": temp_component_files["temp_dir"]}
     )
 
-    file_watcher.start_file_watching({"test.glob_ignore": glob_info})
-
     # Prepare deterministic update path by forcing re-resolve to return data
-    with patch.object(file_watcher, "_re_resolve_component_patterns") as mock_resolve:
-        mock_resolve.return_value = {
-            "name": "test.glob_ignore",
-            "js": temp_component_files["glob_js_file"],
-            "css": None,
-            "html": "<div>Glob Component</div>",
-        }
+    # Legacy helper removed; directly invoke callback path
+    assert watcher_class_mock.call_count == 1
+    cb = watcher_class_mock.call_args.args[1]
+    noisy_path = str(
+        (temp_component_files["temp_dir"] / "js" / "node_modules" / "dep.js").resolve()
+    )
 
-        # Extract the callback passed to the watcher class and invoke it with a noisy path
-        assert watcher_class_mock.call_count == 1
-        cb = watcher_class_mock.call_args.args[1]
-        noisy_path = str(
-            (
-                temp_component_files["temp_dir"] / "js" / "node_modules" / "dep.js"
-            ).resolve()
-        )
+    cb(noisy_path)
 
-        cb(noisy_path)
-
-        # Expect no update callback when the change is under a noisy directory
-        file_watcher._component_update_callback.assert_not_called()
+    # Expect no update callback when the change is under a noisy directory
+    file_watcher._component_update_callback.assert_not_called()
 
 
 @patch("streamlit.components.v2.component_file_watcher._get_is_development_mode")

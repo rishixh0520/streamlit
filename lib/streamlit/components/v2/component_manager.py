@@ -14,8 +14,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
+from streamlit.components.v2.component_definition_resolver import (
+    build_definition_with_validation,
+)
 from streamlit.components.v2.component_file_watcher import ComponentFileWatcher
 from streamlit.components.v2.component_manifest_handler import ComponentManifestHandler
 from streamlit.components.v2.component_registry import (
@@ -30,6 +34,13 @@ if TYPE_CHECKING:
     from streamlit.components.v2.manifest_scanner import ComponentManifest
 
 _LOGGER: Final = get_logger(__name__)
+
+
+@dataclass
+class _ApiInputs:
+    caller_dir: str
+    css: str | None
+    js: str | None
 
 
 class BidiComponentManager:
@@ -60,9 +71,19 @@ class BidiComponentManager:
         # Create dependencies
         self._registry = registry or BidiComponentRegistry()
         self._manifest_handler = manifest_handler or ComponentManifestHandler()
+        # Store API inputs for re-resolution on change events
+        self._api_inputs: dict[str, _ApiInputs] = {}
         # TODO: Do not instantiate file watcher in production
         self._file_watcher = file_watcher or ComponentFileWatcher(
-            self._registry.update_component
+            self._on_components_changed
+        )
+
+    def record_api_inputs(
+        self, component_key: str, caller_dir: str, css: str | None, js: str | None
+    ) -> None:
+        """Record original API inputs for later re-resolution on changes."""
+        self._api_inputs[component_key] = _ApiInputs(
+            caller_dir=caller_dir, css=css, js=js
         )
 
     def register_from_manifest(
@@ -173,11 +194,11 @@ class BidiComponentManager:
             _LOGGER.warning("File watching is already started")
             return
 
-        # Get glob watchers from manifest handler
-        glob_watchers = self._manifest_handler.get_glob_watchers()
+        # Get asset watch roots from manifest handler
+        asset_roots = self._manifest_handler.get_asset_watch_roots()
 
         # Start file watching
-        self._file_watcher.start_file_watching(glob_watchers)
+        self._file_watcher.start_file_watching(asset_roots)
 
         if self._file_watcher.is_watching_active:
             _LOGGER.debug("Started file watching for component changes")  # type: ignore[unreachable]
@@ -225,14 +246,59 @@ class BidiComponentManager:
         return self._manifest_handler.get_metadata(component_name)
 
     def get_glob_watchers(self) -> dict[str, Any]:
-        """Get all glob watcher information for file watching.
+        """Deprecated: manifests no longer provide js/css globs. Returns empty dict."""
+        return {}
 
-        Returns
-        -------
-        dict[str, Any]
-            Dictionary of glob watcher information
+    def _on_components_changed(self, component_names: list[str]) -> None:
+        """Handle change events for components' asset roots.
+
+        For each component, re-resolve from stored API inputs and update registry.
         """
-        return self._manifest_handler.get_glob_watchers()
+        for name in component_names:
+            try:
+                updated = self._recompute_definition_from_api(name)
+                if updated is not None:
+                    self._registry.update_component(name, updated)
+            except Exception:  # noqa: PERF203
+                _LOGGER.exception("Failed to update component after change: %s", name)
+
+    def _recompute_definition_from_api(
+        self, component_name: str
+    ) -> dict[str, Any] | None:
+        """Recompute definition using stored API inputs. Returns update dict or None."""
+        inputs = self._api_inputs.get(component_name)
+        if inputs is None:
+            return None
+
+        # Get existing def to preserve html unless new content is provided later
+        existing_def = self._registry.get(component_name)
+        html_value = existing_def.html if existing_def else None
+
+        try:
+            new_def = build_definition_with_validation(
+                manager=self,
+                component_key=component_name,
+                caller_dir=inputs.caller_dir,
+                html=html_value,
+                css=inputs.css,
+                js=inputs.js,
+            )
+        except Exception as e:
+            _LOGGER.debug(
+                "Skipping update for %s due to re-resolution error: %s",
+                component_name,
+                e,
+            )
+            return None
+
+        return {
+            "name": new_def.name,
+            "html": new_def.html,
+            "css": new_def.css,
+            "js": new_def.js,
+            "css_asset_relative_path": new_def.css_asset_relative_path,
+            "js_asset_relative_path": new_def.js_asset_relative_path,
+        }
 
     @property
     def registry(self) -> BidiComponentRegistry:

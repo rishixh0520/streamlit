@@ -394,6 +394,15 @@ class BidiComponentRegistry:
                 "js": updated_definition_data.get(
                     "js", existing_def.js if existing_def else None
                 ),
+                # Preserve/override asset-dir-relative URL paths when provided
+                "css_asset_relative_path": updated_definition_data.get(
+                    "css_asset_relative_path",
+                    existing_def.css_asset_relative_path if existing_def else None,
+                ),
+                "js_asset_relative_path": updated_definition_data.get(
+                    "js_asset_relative_path",
+                    existing_def.js_asset_relative_path if existing_def else None,
+                ),
             }
 
             # Create new definition with merged data
@@ -402,6 +411,8 @@ class BidiComponentRegistry:
                 html=merged_data["html"],
                 css=merged_data["css"],
                 js=merged_data["js"],
+                css_asset_relative_path=merged_data.get("css_asset_relative_path"),
+                js_asset_relative_path=merged_data.get("js_asset_relative_path"),
             )
             self._components[component_name] = new_def
             _LOGGER.debug("Updated component definition for %s", component_name)
