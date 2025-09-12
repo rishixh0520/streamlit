@@ -26,6 +26,7 @@ def test_incorrect_js_component(app: Page):
 def test_incorrect_css_path_component(app: Page):
     expect(
         app.get_by_text(
-            "streamlit.errors.StreamlitAPIException: css parameter must be a string or None, got PosixPath."
+            "streamlit.errors.StreamlitAPIException: css parameter must be a string or None. "
+            "Pass a string path or glob."
         )
     ).to_be_visible()

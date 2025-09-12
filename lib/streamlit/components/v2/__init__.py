@@ -80,7 +80,7 @@ def _register_component(
     for _param_name, _param_value in (("css", css), ("js", js)):
         if _param_value is not None and not isinstance(_param_value, str):
             raise StreamlitAPIException(
-                f"{_param_name} must be a string or None. Pass a string path or glob."
+                f"{_param_name} parameter must be a string or None. Pass a string path or glob."
             )
 
     # Inspect the *call-site* to derive the caller's module and build a fully
