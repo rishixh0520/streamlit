@@ -174,6 +174,7 @@ class ComponentPathUtils:
         r"""Heuristic to detect inline JS/CSS content strings.
 
         Treat a string as a file path ONLY if it looks path-like:
+        - Does not contain newlines
         - Contains glob characters (*, ?, [, ])
         - Starts with ./, /, or \
         - Contains a path separator ("/" or "\\")
@@ -182,6 +183,9 @@ class ComponentPathUtils:
         Otherwise, treat it as inline content.
         """
         s = value.strip()
+        # If the value contains newlines, it's definitely inline content
+        if "\n" in s or "\r" in s:
+            return True
         # Glob patterns indicate path-like
         if ComponentPathUtils.has_glob_characters(s):
             return False

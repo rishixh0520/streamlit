@@ -98,6 +98,28 @@ def test_string_content(temp_test_files) -> None:
     assert comp.source_paths == {}
 
 
+def test_newline_strings_treated_as_inline() -> None:
+    """Strings containing newlines must be treated as inline content, not paths."""
+    multi_line_js = "export default function() {\n  console.log('hi');\n}"
+    multi_line_css = ".root {\n  color: red;\n}"
+    multi_line_html = "<div>\n  <span>hi</span>\n</div>"
+
+    comp = BidiComponentDefinition(
+        name="newline_test",
+        html=multi_line_html,
+        css=multi_line_css,
+        js=multi_line_js,
+    )
+
+    # Inline content should be exposed via *_content and have no URLs
+    assert comp.html_content == multi_line_html
+    assert comp.css_content == multi_line_css
+    assert comp.js_content == multi_line_js
+    assert comp.css_url is None
+    assert comp.js_url is None
+    assert comp.source_paths == {}
+
+
 def test_file_path_content(temp_test_files) -> None:
     """Test component with file path content."""
     with patch(
